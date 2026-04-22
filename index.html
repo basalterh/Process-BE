@@ -718,6 +718,21 @@ body.corrector-mode .tree-del{ display:none!important }
 body.corrector-mode #sb-actions{ display:none!important }
 
 /* ─── LIEN INTERNE ─── */
+.at-item{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;
+  cursor:pointer;transition:background .1s;border-bottom:1px solid var(--border);
+  font-size:13px;
+}
+.at-item:last-child{border-bottom:none}
+.at-item:hover,.at-item.sel{background:var(--c-xl)}
+.at-num{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  color:white;padding:1px 5px;border-radius:4px;flex-shrink:0;
+}
+.at-num.ch{background:var(--c-dd)}
+.at-num.sc{background:var(--c-d)}
+.at-num.se{background:var(--c)}
+.at-num.pa{background:var(--muted)}
 a.ilink{
   color:var(--c);text-decoration:none;font-weight:600;
   border-bottom:1.5px solid var(--border2);
@@ -948,7 +963,7 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
         <div class="tb-sep"></div>
         <button class="tb-btn" onclick="insertImg()" title="Image">🖼️</button>
         <button class="tb-btn" onclick="openLink()" title="Lien externe">🔗</button>
-        <button class="tb-btn" onclick="openInternalLink()" title="Lien vers une section du document">📎 Interne</button>
+        <button class="tb-btn" onclick="openIlinkPicker()" title="Lien vers une section du document">📎 Interne</button>
         <div class="tb-sep"></div>
         <!-- Encadrés & séparateurs -->
         <div class="pal-wrap">
@@ -1128,20 +1143,27 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
 
 <!-- Internal link modal -->
 <div class="overlay" id="ilink-modal">
-  <div class="modal" style="width:500px;max-height:80vh">
+  <div class="modal" style="width:480px">
     <h3>📎 Lien vers une section</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Choisissez la section vers laquelle pointer. Le texte sélectionné deviendra le lien.</p>
-    <div class="modal-row" style="margin-bottom:8px">
-      <input type="text" id="ilink-search" placeholder="Rechercher une section…"
-        style="flex:1;padding:8px 12px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;outline:none"
-        oninput="filterIlinkList(this.value)">
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Le texte sélectionné deviendra le lien cliquable.</p>
+    <div class="modal-row" style="margin-bottom:12px">
+      <select id="ilink-select" style="flex:1;padding:9px 12px;border-radius:8px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;color:var(--text);background:white;outline:none;max-height:300px">
+        <option value="">— Choisir une section —</option>
+      </select>
     </div>
-    <div id="ilink-list" style="max-height:340px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;background:var(--c-bg)"></div>
-    <div class="modal-acts" style="margin-top:12px">
+    <div class="modal-acts">
       <button class="btn-cancel" onclick="closeOverlay('ilink-modal')">Annuler</button>
+      <button class="btn-ok" onclick="confirmIlink()">📎 Insérer</button>
     </div>
   </div>
 </div>
+
+<!-- @ mention popup -->
+<div id="at-popup" style="
+  display:none;position:fixed;z-index:9000;
+  background:white;border:1.5px solid var(--border);border-radius:10px;
+  box-shadow:var(--shadow-lg);width:320px;max-height:260px;overflow-y:auto;
+"></div>
 
 <!-- Link modal -->
 <div class="overlay" id="link-modal">
@@ -2860,94 +2882,165 @@ function openChapterPicker(si){
   };
 }
 // ─── LIEN INTERNE ────────────────────────
-function openInternalLink(){
-  saveSel();
-  renderIlinkList('');
-  document.getElementById('ilink-search').value='';
-  document.getElementById('ilink-modal').classList.add('open');
-  setTimeout(()=>document.getElementById('ilink-search').focus(),80);
-}
-
-function filterIlinkList(q){ renderIlinkList(q); }
-
-function renderIlinkList(q){
-  const list=document.getElementById('ilink-list');
-  const typeLabel={chapter:'Chapitre',subchapter:'Sous-chap.',section:'Section',paragraph:'Paragraphe'};
-  const typeClass={chapter:'ch',subchapter:'sc',section:'se',paragraph:'se'};
-
-  // Construire liste ordonnée avec numéros
+// Construire liste ordonnée des sections avec numéros
+function buildSectionList(){
   const items=[];
+  const typeClass={chapter:'ch',subchapter:'sc',section:'se',paragraph:'pa'};
   function collect(parentId,prefix){
-    let chIdx=0;
+    let idx=0;
     sections.filter(s=>s.parentId===parentId).forEach(s=>{
-      if(s.type!=='paragraph') chIdx++;
-      const num=s.type==='paragraph'?'◆':(prefix?prefix+'.'+chIdx:String(chIdx));
-      items.push({s,num,prefix:s.type!=='paragraph'?num:prefix});
-      collect(s.id, s.type!=='paragraph'?num:prefix);
+      if(s.type!=='paragraph') idx++;
+      const num=s.type==='paragraph'?'◆':(prefix?prefix+'.'+idx:String(idx));
+      items.push({id:s.id,title:s.title||'(sans titre)',num,type:s.type,cls:typeClass[s.type]||'se'});
+      collect(s.id,s.type!=='paragraph'?num:prefix);
     });
   }
   collect(null,'');
+  return items;
+}
 
-  const filtered=q?items.filter(({s})=>
-    s.title.toLowerCase().includes(q.toLowerCase())||
-    (s.keywords||[]).some(k=>k.toLowerCase().includes(q.toLowerCase()))
-  ):items;
+// ── MÉTHODE 1 : bouton toolbar ──
+function openIlinkPicker(){
+  saveSel();
+  const sel=document.getElementById('ilink-select');
+  sel.innerHTML='<option value="">— Choisir une section —</option>';
+  const typeLabel={chapter:'📁 Chapitre',subchapter:'📖 Sous-chap.',section:'📄 Section',paragraph:'◆ §'};
+  buildSectionList().forEach(item=>{
+    const o=document.createElement('option');
+    o.value=item.id;
+    o.textContent=(item.num?'['+item.num+'] ':'')+item.title+' ('+( typeLabel[item.type]||item.type)+')';
+    sel.appendChild(o);
+  });
+  document.getElementById('ilink-modal').classList.add('open');
+}
 
-  if(!filtered.length){
-    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Aucune section trouvée</div>';
-    return;
-  }
+function confirmIlink(){
+  const sel=document.getElementById('ilink-select');
+  const targetId=sel.value;
+  if(!targetId){showToast('Choisissez une section');return;}
+  const targetItem=buildSectionList().find(i=>i.id===targetId);
+  if(!targetItem) return;
+  closeOverlay('ilink-modal');
+  doInsertIlink(targetId, targetItem.title, targetItem.num);
+}
 
-  list.innerHTML=filtered.map(({s,num})=>`
-    <div class="ilink-item" onclick="insertInternalLink('${s.id}','${(s.title||'').replace(/'/g,"\'")}','${num}')">
-      <span class="ilink-num ${typeClass[s.type]||'se'}">${num}</span>
-      <span class="ilink-title">${s.title||'(sans titre)'}</span>
-      <span class="ilink-type">${typeLabel[s.type]||s.type}</span>
+// ── MÉTHODE 2 : taper @ dans le texte ──
+let _atQuery='';
+let _atRange=null;
+let _atItems=[];
+let _atSelIdx=0;
+
+// Écouter le @ dans tous les blocs éditables
+document.addEventListener('input',e=>{
+  const el=e.target;
+  if(!el.classList.contains('block-content')&&!el.classList.contains('block-title-el')) return;
+  if(mode==='reader') return;
+  const sel=window.getSelection();
+  if(!sel?.rangeCount) return;
+  const r=sel.getRangeAt(0);
+  const node=r.startContainer;
+  if(node.nodeType!==Node.TEXT_NODE) return;
+  const txt=node.textContent.slice(0,r.startOffset);
+  const atIdx=txt.lastIndexOf('@');
+  if(atIdx<0){closeAtPopup();return;}
+  _atQuery=txt.slice(atIdx+1).toLowerCase();
+  _atRange=r.cloneRange();
+  _atRange.setStart(node,atIdx);
+  showAtPopup(r);
+});
+
+document.addEventListener('keydown',e=>{
+  const pop=document.getElementById('at-popup');
+  if(pop.style.display==='none') return;
+  if(e.key==='ArrowDown'){e.preventDefault();_atSelIdx=Math.min(_atSelIdx+1,_atItems.length-1);renderAtPopup();}
+  else if(e.key==='ArrowUp'){e.preventDefault();_atSelIdx=Math.max(_atSelIdx-1,0);renderAtPopup();}
+  else if(e.key==='Enter'&&_atItems.length){e.preventDefault();selectAtItem(_atSelIdx);}
+  else if(e.key==='Escape'){closeAtPopup();}
+},true);
+
+function showAtPopup(curRange){
+  const all=buildSectionList();
+  _atItems=_atQuery?all.filter(i=>i.title.toLowerCase().includes(_atQuery)||i.num.includes(_atQuery)):all;
+  _atItems=_atItems.slice(0,12);
+  _atSelIdx=0;
+  if(!_atItems.length){closeAtPopup();return;}
+  // Position du popup
+  const rect=curRange.getBoundingClientRect();
+  const pop=document.getElementById('at-popup');
+  pop.style.left=Math.min(rect.left,window.innerWidth-330)+'px';
+  pop.style.top=(rect.bottom+4)+'px';
+  pop.style.display='block';
+  renderAtPopup();
+}
+
+function renderAtPopup(){
+  const pop=document.getElementById('at-popup');
+  pop.innerHTML=_atItems.map((item,i)=>`
+    <div class="at-item${i===_atSelIdx?' sel':''}" onmousedown="event.preventDefault();selectAtItem(${i})">
+      <span class="at-num ${item.cls}">${item.num}</span>
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${item.title}</span>
     </div>`).join('');
 }
 
-function insertInternalLink(targetId, targetTitle, targetNum){
-  closeOverlay('ilink-modal');
+function selectAtItem(idx){
+  const item=_atItems[idx];
+  if(!item) return;
+  closeAtPopup();
+  // Supprimer le @query dans le texte
+  if(_atRange){
+    const sel=window.getSelection();
+    const endRange=sel.getRangeAt(0).cloneRange();
+    const delRange=_atRange.cloneRange();
+    delRange.setEnd(endRange.startContainer,endRange.startOffset);
+    delRange.deleteContents();
+  }
+  doInsertIlink(item.id,item.title,item.num);
+}
+
+function closeAtPopup(){
+  document.getElementById('at-popup').style.display='none';
+  _atQuery='';_atRange=null;_atItems=[];
+}
+
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#at-popup')) closeAtPopup();
+});
+
+// ── INSERTION COMMUNE ──
+function doInsertIlink(targetId,targetTitle,targetNum){
   const el=getActiveContent();
-  if(!el) return;
-  el.focus();
-  restoreSel();
-
   const sel=window.getSelection();
-  const linkText=sel&&!sel.isCollapsed?sel.toString():(targetNum?targetNum+' – '+targetTitle:targetTitle);
-
+  const linkText=sel&&!sel.isCollapsed?sel.toString():(targetNum&&targetNum!=='◆'?targetNum+' – '+targetTitle:targetTitle);
   const a=document.createElement('a');
-  a.href='#';
-  a.className='ilink';
-  a.dataset.target=targetId;
-  a.textContent=linkText;
-  a.title='→ '+targetTitle;
-  // Clic → naviguer vers la section
+  a.href='#';a.className='ilink';a.dataset.target=targetId;
+  a.textContent=linkText;a.title='→ '+targetTitle;
   a.onclick=e=>{e.preventDefault();selectSection(targetId);};
-
   if(sel?.rangeCount){
     const r=sel.getRangeAt(0);
     if(!sel.isCollapsed) r.deleteContents();
     r.insertNode(a);
-    // Curseur après le lien
-    r.setStartAfter(a);r.collapse(true);
-    sel.removeAllRanges();sel.addRange(r);
-  } else {
+    const sp=document.createTextNode(' ');
+    a.after(sp);
+    const r2=document.createRange();r2.setStart(sp,1);r2.collapse(true);
+    sel.removeAllRanges();sel.addRange(r2);
+  } else if(el){
     el.appendChild(a);
   }
   const sec=sections.find(s=>s.id===curId);
-  if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
-  showToast('📎 Lien interne inséré');
+  if(sec){sec.content=(el||getActiveContent())?.innerHTML||'';saveSectionToFirebase(sec.id);}
+  showToast('📎 Lien inséré — '+targetTitle);
 }
 
 // Réhydrater les liens internes après rechargement Firebase
 function rehydrateInternalLinks(container){
   container.querySelectorAll('a.ilink[data-target]').forEach(a=>{
-    if(a.dataset.rh) return;
-    a.dataset.rh='1';
+    if(a.dataset.rh) return;a.dataset.rh='1';
     a.onclick=e=>{e.preventDefault();selectSection(a.dataset.target);};
   });
 }
+
+function filterIlinkList(q){}
+
 
 function openLink(){ saveSel();document.getElementById('link-text').value=window.getSelection().toString()||'';document.getElementById('link-url').value='';document.getElementById('link-modal').classList.add('open');setTimeout(()=>document.getElementById('link-url').focus(),80);}
 function confirmLink(){
