@@ -1449,7 +1449,7 @@ document.addEventListener('click',e=>{
 });
 function switchMode(m){
   // Changement de mode désactivé — le rôle est défini par Firebase
-  showToast('🔒 Votre rôle est défini par l'administrateur');
+  showToast('🔒 Votre rôle est défini par l\'administrateur');
 }
 
 // ─── DATA FIREBASE ───────────────────────
@@ -1887,7 +1887,7 @@ function moveSection(srcId,tarId){
   pushSectionsToFirebase(); renderTree();
 }
 function confirmDel(id){
-  if(mode!=='editor'){ showToast('🔒 Action réservée à l'Éditeur'); return; }
+  if(mode!=='editor'){ showToast('🔒 Action réservée à l\'Éditeur'); return; }
   const s=sections.find(x=>x.id===id);
   showConfirm(`Supprimer « ${s?.title||'cette section'} » et tous ses enfants ?`,()=>{
     const ids=[id,...allDesc(id)];
@@ -2836,7 +2836,7 @@ function removeKw(kw){
 
 // ─── ADD SECTION ─────────────────────────
 function openAdd(defaultType){
-  if(mode!=='editor'){ showToast('🔒 Action réservée à l'Éditeur'); return; }
+  if(mode!=='editor'){ showToast('🔒 Action réservée à l\'Éditeur'); return; }
   document.getElementById('add-type').value=defaultType||'chapter';
   document.getElementById('add-title').value='';
   const par=document.getElementById('add-parent');
