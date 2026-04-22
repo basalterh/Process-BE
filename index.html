@@ -717,6 +717,30 @@ body.reader-mode .img-handle{ display:none!important }
 body.corrector-mode .tree-del{ display:none!important }
 body.corrector-mode #sb-actions{ display:none!important }
 
+/* ─── LIEN INTERNE ─── */
+a.ilink{
+  color:var(--c);text-decoration:none;font-weight:600;
+  border-bottom:1.5px solid var(--border2);
+  padding-bottom:1px;transition:.12s;cursor:pointer;
+}
+a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
+.ilink-item{
+  display:flex;align-items:center;gap:8px;padding:8px 12px;
+  cursor:pointer;transition:background .11s;border-bottom:1px solid var(--border);
+}
+.ilink-item:last-child{border-bottom:none}
+.ilink-item:hover{background:var(--c-xl)}
+.ilink-num{
+  font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;
+  color:white;padding:2px 6px;border-radius:4px;background:var(--c);
+  flex-shrink:0;white-space:nowrap;
+}
+.ilink-num.ch{background:var(--c-dd)}
+.ilink-num.sc{background:var(--c-d);font-size:9px}
+.ilink-num.se{background:var(--c);font-size:9px}
+.ilink-title{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ilink-type{font-size:10px;color:var(--muted);margin-left:auto;flex-shrink:0}
+
 /* ─── TOAST ─── */
 #toast{
   position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);
@@ -923,7 +947,8 @@ body.corrector-mode #sb-actions{ display:none!important }
         <button class="tb-btn" onclick="removeIndent()" title="Retrait">⇤</button>
         <div class="tb-sep"></div>
         <button class="tb-btn" onclick="insertImg()" title="Image">🖼️</button>
-        <button class="tb-btn" onclick="openLink()" title="Lien">🔗</button>
+        <button class="tb-btn" onclick="openLink()" title="Lien externe">🔗</button>
+        <button class="tb-btn" onclick="openInternalLink()" title="Lien vers une section du document">📎 Interne</button>
         <div class="tb-sep"></div>
         <!-- Encadrés & séparateurs -->
         <div class="pal-wrap">
@@ -1097,6 +1122,23 @@ body.corrector-mode #sb-actions{ display:none!important }
     <div id="index-content"></div>
     <div class="modal-acts">
       <button class="btn-ok" onclick="closeOverlay('index-modal')">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- Internal link modal -->
+<div class="overlay" id="ilink-modal">
+  <div class="modal" style="width:500px;max-height:80vh">
+    <h3>📎 Lien vers une section</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Choisissez la section vers laquelle pointer. Le texte sélectionné deviendra le lien.</p>
+    <div class="modal-row" style="margin-bottom:8px">
+      <input type="text" id="ilink-search" placeholder="Rechercher une section…"
+        style="flex:1;padding:8px 12px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;outline:none"
+        oninput="filterIlinkList(this.value)">
+    </div>
+    <div id="ilink-list" style="max-height:340px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;background:var(--c-bg)"></div>
+    <div class="modal-acts" style="margin-top:12px">
+      <button class="btn-cancel" onclick="closeOverlay('ilink-modal')">Annuler</button>
     </div>
   </div>
 </div>
@@ -1423,7 +1465,10 @@ function initUI(){
   }
 
   // Kw-bar visible uniquement pour éditeur
-  document.getElementById('kw-bar').style.display='none'; // reset, géré dans selectSection
+  // kw-bar : toujours visible pour éditeur et correcteur
+  const kwBar=document.getElementById('kw-bar');
+  if(mode==='reader'){ kwBar.classList.remove('show'); kwBar.style.display='none'; }
+  else { kwBar.style.display=''; kwBar.classList.add('show'); }
 
   // Vue lecteur : forcer reader-view dès la connexion
   if(isRd){
@@ -1476,17 +1521,16 @@ function startFirebaseListeners(){
       sections = defaultData();
       pushSectionsToFirebase();
     }
-    const wasEmpty = !curChapterId;
     renderTree();
-    if(!wasEmpty && curId) {
-      // Refresh du bloc affiché si quelqu'un d'autre a modifié
-      const el = document.querySelector(`.doc-block[data-id="${curId}"] .block-content`);
-      const sec = sections.find(s=>s.id===curId);
-      if(el && sec && document.activeElement !== el){
-        el.innerHTML = sec.content || '';
-        rehydrate(el.parentElement);
-        rehydrateTables(el.parentElement);
-      }
+    if(curChapterId && curId) {
+      // Sync silencieuse : mettre à jour uniquement les blocs non actifs
+      sections.forEach(sec=>{
+        if(sec.id===curId && document.activeElement?.closest(`.doc-block[data-id="${sec.id}"]`)) return;
+        const contentEl = document.querySelector(`.doc-block[data-id="${sec.id}"] .block-content`);
+        const titleEl = document.querySelector(`.doc-block[data-id="${sec.id}"] .block-title-el`);
+        if(contentEl && document.activeElement!==contentEl) contentEl.innerHTML=sec.content||'';
+        if(titleEl && document.activeElement!==titleEl) titleEl.textContent=sec.title||'';
+      });
     }
   });
 
@@ -1913,20 +1957,36 @@ function selectSection(id){
   curId=id;
   const s=sections.find(x=>x.id===id);
   if(!s) return;
-  const root=chapterRoot(id);
   document.getElementById('empty-state').style.display='none';
-  // Lecteur : toujours en mode preview/reader
   if(mode==='reader') viewMode='preview';
-  if(curChapterId===root.id){
-    // Même chapitre : scroll vers bloc
-    const el=document.querySelector(`.doc-block[data-id="${id}"]`);
-    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+
+  // Scroll continu : si le doc complet est déjà affiché, scroll direct
+  const existingBlock=document.querySelector(`.doc-block[data-id="${id}"]`);
+  if(existingBlock){
+    existingBlock.scrollIntoView({behavior:'smooth',block:'start'});
     setActiveBlock(id);
   } else {
-    curChapterId=root.id;
-    renderDoc(root.id,id);
+    // Premier affichage : rendre tout le document
+    renderFullDoc(id);
   }
   highlightTree(id);
+}
+
+function renderFullDoc(scrollToId){
+  // Construire tous les blocs de tous les chapitres racine dans l'ordre
+  const allRoots = sections.filter(s=>!s.parentId);
+  const allBlocks = [];
+  allRoots.forEach(root=>{
+    allBlocks.push(root);
+    descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));
+  });
+  curChapterId = 'all';
+
+  if(mode==='reader' || viewMode==='preview'){
+    renderReaderViewFull(allBlocks, scrollToId);
+  } else {
+    renderEditViewFull(allBlocks, scrollToId);
+  }
 }
 
 function showEmpty(){
@@ -1942,20 +2002,12 @@ function showEmpty(){
 
 // ─── RENDER DOC ───────────────────────────
 function renderDoc(rootId,scrollToId){
-  const root=sections.find(s=>s.id===rootId);
-  if(!root) return;
-  const blocks=[root,...descendantsOrdered(rootId)];
-
-  if(mode==='reader' || viewMode==='preview'){
-    if(mode==='reader') renderReaderView(blocks,scrollToId);
-    else renderPreviewView(blocks);
-  } else {
-    renderEditView(blocks,scrollToId);
-  }
+  renderFullDoc(scrollToId||rootId);
 }
 
 // ── EDIT VIEW ────────────────────────────
-function renderEditView(blocks,scrollToId){
+function renderEditView(blocks,scrollToId){ renderEditViewFull(blocks,scrollToId); }
+function renderEditViewFull(blocks,scrollToId){
   document.getElementById('reader-view').classList.remove('show');
   document.getElementById('preview-view').classList.remove('show');
   document.getElementById('edit-view').classList.add('show');
@@ -1967,11 +2019,12 @@ function renderEditView(blocks,scrollToId){
   canvas.innerHTML='';
   blocks.forEach(s=>canvas.appendChild(buildBlock(s)));
   rehydrate(canvas);
+  rehydrateTables(canvas);
 
   requestAnimationFrame(()=>{
     const target=scrollToId||blocks[0]?.id;
     const el=document.querySelector(`.doc-block[data-id="${target}"]`);
-    if(el) el.scrollIntoView({behavior:'auto',block:'start'});
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
     setActiveBlock(target);
     setupObserver();
   });
@@ -2068,7 +2121,8 @@ function buildBlock(s){
 }
 
 // ── READER VIEW ──────────────────────────
-function renderReaderView(blocks,scrollToId){
+function renderReaderView(blocks,scrollToId){ renderReaderViewFull(blocks,scrollToId); }
+function renderReaderViewFull(blocks,scrollToId){
   document.getElementById('edit-view').classList.remove('show');
   document.getElementById('preview-view').classList.remove('show');
   document.getElementById('reader-view').classList.add('show');
@@ -2122,25 +2176,21 @@ function setView(v){
   viewMode=v;
   document.getElementById('ep-edit').classList.toggle('on',v==='edit');
   document.getElementById('ep-prev').classList.toggle('on',v==='preview');
-  if(!curChapterId) return;
-  const root=sections.find(s=>s.id===curChapterId);
-  if(!root) return;
-  const blocks=[root,...descendantsOrdered(curChapterId)];
   if(v==='edit'){
     document.getElementById('preview-view').classList.remove('show');
-    if(mode==='reader'){
-      renderReaderView(blocks,curId);
-    } else {
-      document.getElementById('edit-view').classList.add('show');
-      document.getElementById('toolbar').style.display='flex';
-      document.getElementById('kw-bar').classList.add('show');
-    }
+    document.getElementById('edit-view').classList.add('show');
+    document.getElementById('toolbar').style.display='flex';
+    if(mode!=='reader') document.getElementById('kw-bar').classList.add('show');
   } else {
-    // Preview = rendu propre pour éditeur/correcteur
     saveAllBlocks();
     document.getElementById('edit-view').classList.remove('show');
     document.getElementById('toolbar').style.display='none';
-    renderPreviewView(blocks);
+    // Preview de tout le document
+    const allRoots=sections.filter(s=>!s.parentId);
+    const allBlocks=[];
+    allRoots.forEach(root=>{allBlocks.push(root);descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));});
+    renderPreviewView(allBlocks);
+    if(curId){const el=document.querySelector(`.doc-block[data-id="${curId}"]`);if(el) el.scrollIntoView({behavior:'smooth',block:'start'});}
   }
 }
 
@@ -2237,9 +2287,11 @@ function saveAllBlocks(){
     if(!sec) return;
     const t=bl.querySelector('.block-title-el');
     const c=bl.querySelector('.block-content');
+    const prevContent=sec.content; const prevTitle=sec.title;
     if(t) sec.title=t.textContent;
     if(c) sec.content=c.innerHTML;
-    ids.push(id);
+    // Sauvegarder seulement si modifié
+    if(sec.content!==prevContent||sec.title!==prevTitle) ids.push(id);
   });
   ids.forEach(id=>saveSectionToFirebase(id));
 }
@@ -2427,6 +2479,7 @@ function rehydrate(container){
     if(!img) return;attachImgEvents(wrap,img,handle);
   });
   rehydrateTables(container);
+  rehydrateInternalLinks(container);
 }
 
 // ─── ANNOTATIONS ─────────────────────────
@@ -2806,6 +2859,96 @@ function openChapterPicker(si){
     showToast('✓ Chapitre(s) ajouté(s)');
   };
 }
+// ─── LIEN INTERNE ────────────────────────
+function openInternalLink(){
+  saveSel();
+  renderIlinkList('');
+  document.getElementById('ilink-search').value='';
+  document.getElementById('ilink-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('ilink-search').focus(),80);
+}
+
+function filterIlinkList(q){ renderIlinkList(q); }
+
+function renderIlinkList(q){
+  const list=document.getElementById('ilink-list');
+  const typeLabel={chapter:'Chapitre',subchapter:'Sous-chap.',section:'Section',paragraph:'Paragraphe'};
+  const typeClass={chapter:'ch',subchapter:'sc',section:'se',paragraph:'se'};
+
+  // Construire liste ordonnée avec numéros
+  const items=[];
+  function collect(parentId,prefix){
+    let chIdx=0;
+    sections.filter(s=>s.parentId===parentId).forEach(s=>{
+      if(s.type!=='paragraph') chIdx++;
+      const num=s.type==='paragraph'?'◆':(prefix?prefix+'.'+chIdx:String(chIdx));
+      items.push({s,num,prefix:s.type!=='paragraph'?num:prefix});
+      collect(s.id, s.type!=='paragraph'?num:prefix);
+    });
+  }
+  collect(null,'');
+
+  const filtered=q?items.filter(({s})=>
+    s.title.toLowerCase().includes(q.toLowerCase())||
+    (s.keywords||[]).some(k=>k.toLowerCase().includes(q.toLowerCase()))
+  ):items;
+
+  if(!filtered.length){
+    list.innerHTML='<div style="padding:16px;text-align:center;color:var(--muted);font-size:13px">Aucune section trouvée</div>';
+    return;
+  }
+
+  list.innerHTML=filtered.map(({s,num})=>`
+    <div class="ilink-item" onclick="insertInternalLink('${s.id}','${(s.title||'').replace(/'/g,"\'")}','${num}')">
+      <span class="ilink-num ${typeClass[s.type]||'se'}">${num}</span>
+      <span class="ilink-title">${s.title||'(sans titre)'}</span>
+      <span class="ilink-type">${typeLabel[s.type]||s.type}</span>
+    </div>`).join('');
+}
+
+function insertInternalLink(targetId, targetTitle, targetNum){
+  closeOverlay('ilink-modal');
+  const el=getActiveContent();
+  if(!el) return;
+  el.focus();
+  restoreSel();
+
+  const sel=window.getSelection();
+  const linkText=sel&&!sel.isCollapsed?sel.toString():(targetNum?targetNum+' – '+targetTitle:targetTitle);
+
+  const a=document.createElement('a');
+  a.href='#';
+  a.className='ilink';
+  a.dataset.target=targetId;
+  a.textContent=linkText;
+  a.title='→ '+targetTitle;
+  // Clic → naviguer vers la section
+  a.onclick=e=>{e.preventDefault();selectSection(targetId);};
+
+  if(sel?.rangeCount){
+    const r=sel.getRangeAt(0);
+    if(!sel.isCollapsed) r.deleteContents();
+    r.insertNode(a);
+    // Curseur après le lien
+    r.setStartAfter(a);r.collapse(true);
+    sel.removeAllRanges();sel.addRange(r);
+  } else {
+    el.appendChild(a);
+  }
+  const sec=sections.find(s=>s.id===curId);
+  if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
+  showToast('📎 Lien interne inséré');
+}
+
+// Réhydrater les liens internes après rechargement Firebase
+function rehydrateInternalLinks(container){
+  container.querySelectorAll('a.ilink[data-target]').forEach(a=>{
+    if(a.dataset.rh) return;
+    a.dataset.rh='1';
+    a.onclick=e=>{e.preventDefault();selectSection(a.dataset.target);};
+  });
+}
+
 function openLink(){ saveSel();document.getElementById('link-text').value=window.getSelection().toString()||'';document.getElementById('link-url').value='';document.getElementById('link-modal').classList.add('open');setTimeout(()=>document.getElementById('link-url').focus(),80);}
 function confirmLink(){
   const url=document.getElementById('link-url').value.trim();const txt=document.getElementById('link-text').value.trim();
@@ -2821,7 +2964,11 @@ function confirmLink(){
 
 // ─── KEYWORDS ────────────────────────────
 function updateKwBar(s){
-  if(!s) return;
+  const bar=document.getElementById('kw-bar');
+  if(mode==='reader'){ bar.classList.remove('show'); return; }
+  bar.style.display='';
+  bar.classList.add('show');
+  if(!s){ renderKwTags([]); return; }
   renderKwTags(s.keywords||[]);
 }
 function renderKwTags(kws){
