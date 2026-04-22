@@ -702,6 +702,21 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
 .confirm-icon{font-size:32px;text-align:center;margin-bottom:10px}
 .confirm-msg{font-size:14px;text-align:center;color:var(--text);font-weight:500;margin-bottom:4px}
 
+/* ─── READER MODE ─── */
+body.reader-mode #toolbar{ display:none!important }
+body.reader-mode #kw-bar{ display:none!important }
+body.reader-mode .tree-del{ display:none!important }
+body.reader-mode .tree-row{ cursor:pointer }
+body.reader-mode .doc-block .block-title-el{ pointer-events:none }
+body.reader-mode .doc-block .block-content{ pointer-events:none }
+body.reader-mode .box-del{ display:none!important }
+body.reader-mode .doc-sep:hover::after{ display:none }
+body.reader-mode .tbl-actions{ display:none!important }
+body.reader-mode .img-bar{ display:none!important }
+body.reader-mode .img-handle{ display:none!important }
+body.corrector-mode .tree-del{ display:none!important }
+body.corrector-mode #sb-actions{ display:none!important }
+
 /* ─── TOAST ─── */
 #toast{
   position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(80px);
@@ -795,7 +810,7 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
       <button class="ep-btn on" id="ep-edit" onclick="setView('edit')" title="Édition">✏️</button>
       <button class="ep-btn" id="ep-prev" onclick="setView('preview')" title="Aperçu">👁️</button>
     </div>
-    <div class="hdr-sep"></div>
+    <div class="hdr-sep" id="hdr-sep-corr"></div>
 
     <!-- Corrections -->
     <div style="position:relative;display:none" id="corr-wrap">
@@ -803,19 +818,19 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
       <div id="corr-badge"></div>
     </div>
 
-    <button class="hdr-icon" onclick="openIndex()" title="Index mots-clés">📇</button>
+    <button class="hdr-icon" id="hdr-index-btn" onclick="openIndex()" title="Index mots-clés">📇</button>
     <div class="hdr-sep"></div>
     <div id="users-wrap" style="display:none">
       <button class="hdr-icon" onclick="openUserMgr()" title="Gérer les utilisateurs">👥</button>
     </div>
     <div class="hdr-sep" id="users-sep" style="display:none"></div>
-    <button class="hdr-icon" onclick="saveJSON()" title="Sauvegarder JSON">💾</button>
-    <button class="hdr-icon" onclick="document.getElementById('restore-file').click()" title="Restaurer JSON">📥</button>
-    <div class="hdr-sep"></div>
-    <button class="hdr-icon" onclick="exportHTML()" title="Exporter HTML">
+    <button class="hdr-icon" id="hdr-save-btn" onclick="saveJSON()" title="Sauvegarder JSON">💾</button>
+    <button class="hdr-icon" id="hdr-restore-btn" onclick="document.getElementById('restore-file').click()" title="Restaurer JSON">📥</button>
+    <div class="hdr-sep" id="hdr-sep-export"></div>
+    <button class="hdr-icon" id="hdr-export-btn" onclick="exportHTML()" title="Exporter HTML">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
     </button>
-    <button class="hdr-icon" onclick="exportPDF()" title="Exporter PDF">
+    <button class="hdr-icon" id="hdr-pdf-btn" onclick="exportPDF()" title="Exporter PDF">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>
     </button>
     <input type="file" id="restore-file" accept=".json" style="display:none" onchange="restoreJSON(this)">
@@ -1363,25 +1378,58 @@ function fbLogout(){
 // ─── INIT UI ─────────────────────────────
 const modeLabels={reader:'👁️ Lecteur',corrector:'✓ Correcteur',editor:'✏️ Éditeur'};
 function initUI(){
-  // Mode pill
+  const isEd = mode==='editor';
+  const isCorr = mode==='corrector';
+  const isRd = mode==='reader';
+
+  // Mode pill — affiche le rôle Firebase, non modifiable par l'utilisateur
   document.getElementById('mode-wrap').style.display='block';
   document.getElementById('mode-icon').textContent=modeLabels[mode].split(' ')[0];
   document.getElementById('mode-label').textContent=modeLabels[mode].split(' ').slice(1).join(' ');
-  // Editor-only
-  const isEd=mode==='editor';
-  const isRd=mode==='reader';
+  // Désactiver le clic sur la pill si pas éditeur (l'éditeur peut voir le menu pour info mais pas changer le rôle des autres)
+  const pill=document.getElementById('mode-menu');
+  // Le menu de changement de mode est désactivé — le rôle vient de Firebase
+  pill.style.display='none'; // On masque le menu déroulant de changement de rôle
+
+  // Toolbar — visible uniquement pour éditeur et correcteur
+  document.getElementById('toolbar').style.display='none'; // sera géré dans renderEditView
+
+  // Header — masquer les boutons inutiles selon le rôle
   document.getElementById('sb-actions').style.display=isEd?'flex':'none';
   document.getElementById('sector-mgr-btn').style.display=isEd?'block':'none';
   document.getElementById('users-wrap').style.display=isEd?'flex':'none';
   document.getElementById('users-sep').style.display=isEd?'block':'none';
-  addLogoutBtn();
   document.getElementById('ep-switch').style.display=isRd?'none':'flex';
-  document.getElementById('corr-wrap').style.display=(mode!=='reader')?'flex':'none';
+  document.getElementById('corr-wrap').style.display=!isRd?'flex':'none';
+
+  // Boutons header — masquer pour lecteur
+  const hdrBtns=['hdr-index-btn','hdr-save-btn','hdr-restore-btn','hdr-export-btn','hdr-pdf-btn','hdr-sep-corr','hdr-sep-export'];
+  hdrBtns.forEach(id=>{const el=document.getElementById(id);if(el) el.style.display=isRd?'none':'';});
+
+  // Mode pill non cliquable pour lecteur/correcteur (cosmétique)
+  const modePillBtn=document.querySelector('.mode-pill');
+  if(modePillBtn){
+    modePillBtn.style.cursor=isEd?'pointer':'default';
+    modePillBtn.onclick=isEd?toggleModeMenu:null;
+  }
+
+  // Kw-bar visible uniquement pour éditeur
+  document.getElementById('kw-bar').style.display='none'; // reset, géré dans selectSection
+
+  // Vue lecteur : forcer reader-view dès la connexion
+  if(isRd){
+    document.getElementById('ep-switch').style.display='none';
+  }
+
   // Sidebar open
   document.getElementById('sb-toggle').classList.add('on');
-  // Update active mode in menu
   syncModeMenu();
   updateCorrBadge();
+  addLogoutBtn();
+
+  // Classe CSS sur le body pour restreindre visuellement
+  document.body.classList.remove('reader-mode','corrector-mode','editor-mode');
+  document.body.classList.add(mode+'-mode');
 }
 
 function syncModeMenu(){
@@ -1400,21 +1448,8 @@ document.addEventListener('click',e=>{
   if(!e.target.closest('.mode-pill-wrap')) document.getElementById('mode-menu').classList.remove('open');
 });
 function switchMode(m){
-  document.getElementById('mode-menu').classList.remove('open');
-  if(m===mode) return;
-  if(PW[m]){
-    const pw=window.prompt(`Mot de passe pour le mode "${modeLabels[m].split(' ').slice(1).join(' ')}" :`);
-    if(pw!==PW[m]){ if(pw!==null) showToast('❌ Mot de passe incorrect'); return; }
-  }
-  saveAllBlocks();
-  mode=m;
-  curChapterId=null;
-  document.getElementById('mode-icon').textContent=modeLabels[m].split(' ')[0];
-  document.getElementById('mode-label').textContent=modeLabels[m].split(' ').slice(1).join(' ');
-  initUI();
-  renderTree();
-  if(curId) selectSection(curId);
-  else showEmpty();
+  // Changement de mode désactivé — le rôle est défini par Firebase
+  showToast('🔒 Votre rôle est défini par l'administrateur');
 }
 
 // ─── DATA FIREBASE ───────────────────────
@@ -1852,6 +1887,7 @@ function moveSection(srcId,tarId){
   pushSectionsToFirebase(); renderTree();
 }
 function confirmDel(id){
+  if(mode!=='editor'){ showToast('🔒 Action réservée à l'Éditeur'); return; }
   const s=sections.find(x=>x.id===id);
   showConfirm(`Supprimer « ${s?.title||'cette section'} » et tous ses enfants ?`,()=>{
     const ids=[id,...allDesc(id)];
@@ -1870,6 +1906,8 @@ function selectSection(id){
   if(!s) return;
   const root=chapterRoot(id);
   document.getElementById('empty-state').style.display='none';
+  // Lecteur : toujours en mode preview/reader
+  if(mode==='reader') viewMode='preview';
   if(curChapterId===root.id){
     // Même chapitre : scroll vers bloc
     const el=document.querySelector(`.doc-block[data-id="${id}"]`);
@@ -1899,8 +1937,9 @@ function renderDoc(rootId,scrollToId){
   if(!root) return;
   const blocks=[root,...descendantsOrdered(rootId)];
 
-  if(mode==='reader'){
-    renderReaderView(blocks,scrollToId);
+  if(mode==='reader' || viewMode==='preview'){
+    if(mode==='reader') renderReaderView(blocks,scrollToId);
+    else renderPreviewView(blocks);
   } else {
     renderEditView(blocks,scrollToId);
   }
@@ -1932,7 +1971,7 @@ function renderEditView(blocks,scrollToId){
 function buildBlock(s){
   const d=depth(s);
   const n=secNum(s);
-  const editable=mode!=='reader';
+  const editable=mode==='editor'||mode==='corrector';
   const block=document.createElement('div');
   block.className=`doc-block depth-${d}`;
   block.dataset.id=s.id;
@@ -1957,7 +1996,7 @@ function buildBlock(s){
 
   const title=document.createElement('div');
   title.className=`block-title-el t${Math.min(d,3)}`;
-  title.contentEditable=editable?'true':'false';
+  title.contentEditable=(mode==='editor')?'true':'false';
   title.setAttribute('placeholder','Titre…');
   title.textContent=s.title||'';
   title.addEventListener('input',()=>{
@@ -2267,6 +2306,7 @@ function insEmoji(e){
 
 // ─── ENCADRÉS & SÉPARATEURS ──────────────
 function insertBox(t){
+  if(mode==='reader'){ showToast('🔒 Lecture seule'); return; }
   closePals();const el=getActiveContent();if(!el) return;el.focus();
   const labels={info:'💡 Info',warn:'⚠️ Attention',danger:'🚫 Danger',ok:'✅ Succès',note:'📝 Note',grey:'📋 Neutre'};
   const box=document.createElement('div');
@@ -2279,6 +2319,7 @@ function insertBox(t){
   const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveData();}
 }
 function insertSep(t){
+  if(mode==='reader'){ showToast('🔒 Lecture seule'); return; }
   closePals();const el=getActiveContent();if(!el) return;el.focus();
   const hr=document.createElement('hr');hr.className='doc-sep';hr.setAttribute('data-s',t);hr.contentEditable='false';
   const p=document.createElement('p');p.innerHTML='<br>';
@@ -2302,7 +2343,7 @@ document.addEventListener('mousedown',e=>{
 });
 
 // ─── IMAGE ────────────────────────────────
-function insertImg(){ document.getElementById('img-file').click(); }
+function insertImg(){ if(mode==='reader'){ showToast('🔒 Lecture seule'); return; } document.getElementById('img-file').click(); }
 function handleImg(input){
   const f=input.files[0];if(!f) return;
   const r=new FileReader();
@@ -2795,6 +2836,7 @@ function removeKw(kw){
 
 // ─── ADD SECTION ─────────────────────────
 function openAdd(defaultType){
+  if(mode!=='editor'){ showToast('🔒 Action réservée à l'Éditeur'); return; }
   document.getElementById('add-type').value=defaultType||'chapter';
   document.getElementById('add-title').value='';
   const par=document.getElementById('add-parent');
