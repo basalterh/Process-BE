@@ -1277,7 +1277,6 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.database();
-auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
 let currentUser = null;   // objet Firebase User
 let _sectionsListener = null;
@@ -1305,6 +1304,7 @@ async function fbLogin(){
   document.getElementById('login-form').style.display='none';
   document.getElementById('login-loading').style.display='block';
   try{
+    await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
     await auth.signInWithEmailAndPassword(email, password);
   } catch(e){
     document.getElementById('login-form').style.display='block';
@@ -1333,6 +1333,12 @@ async function fbResetPw(){
 }
 
 // Observateur auth — déclenché à chaque connexion/déconnexion
+// Forcer la déconnexion au chargement (session = onglet seulement)
+// Si la page vient d'être chargée (pas de navigation interne), déconnecter
+if(!sessionStorage.getItem('pb_session_active')){
+  auth.signOut();
+}
+
 auth.onAuthStateChanged(async user => {
   if(user){
     currentUser = user;
@@ -1361,6 +1367,7 @@ auth.onAuthStateChanged(async user => {
 });
 
 function doLogin(){
+  sessionStorage.setItem('pb_session_active','1');
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   loadSectors();
@@ -1373,6 +1380,7 @@ function fbLogout(){
   saveAllBlocks();
   stopFirebaseListeners();
   if(_presenceRef) _presenceRef.remove();
+  sessionStorage.removeItem('pb_session_active');
   auth.signOut();
 }
 
@@ -3079,11 +3087,12 @@ async function inviteUser(){
     showToast('✓ Utilisateur invité');
   } catch(e){
     const msgs = {
-      'auth/email-already-in-use':'Cet email est déjà utilisé.',
+      'auth/email-already-in-use':'Cet email existe déjà dans Firebase Auth mais n\'est pas dans la liste — cherchez-le dans Firebase Console > Authentication > Utilisateurs et copiez son UID pour l\'ajouter manuellement dans la DB.',
       'auth/invalid-email':'Email invalide.',
       'auth/weak-password':'Mot de passe trop faible (min. 6 caractères).',
     };
     msgEl.textContent = msgs[e.code]||'Erreur : '+e.message;
+    msgEl.style.fontSize='11px';
     msgEl.style.color='#ef4444';
   }
 }
