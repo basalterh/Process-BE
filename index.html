@@ -1277,6 +1277,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db   = firebase.database();
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
 let currentUser = null;   // objet Firebase User
 let _sectionsListener = null;
