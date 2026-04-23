@@ -1179,7 +1179,7 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
 </div>
 
 <!-- Confirm modal -->
-<div class="overlay" id="confirm-modal">
+<div class="overlay" id="confirm-modal" style="z-index:1100">
   <div class="modal" style="width:360px;text-align:center">
     <div class="confirm-icon">🗑</div>
     <div class="confirm-msg" id="confirm-msg"></div>
@@ -1230,7 +1230,7 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
 </div>
 
 <!-- Sector Manager Modal -->
-<div class="overlay" id="sector-modal">
+<div class="overlay" id="sector-modal" style="z-index:950">
   <div class="modal" style="width:580px;max-height:80vh">
     <h3>⚙️ Gérer les secteurs</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:16px">Les secteurs organisent vos chapitres dans le panneau gauche. Chaque chapitre peut appartenir à un seul secteur.</p>
@@ -2794,6 +2794,13 @@ function renderSectorMgr(){
     // Header : icône + nom + supprimer
     const head=document.createElement('div');
     head.className='sec-card-head';
+
+    // Poignée drag
+    const handle=document.createElement('span');
+    handle.textContent='⠿';
+    handle.style.cssText='color:var(--muted);font-size:16px;cursor:grab;flex-shrink:0;padding:0 4px';
+    handle.title='Glisser pour réordonner';
+    head.appendChild(handle);
 
     // Icône cliquable
     const iconBtn=document.createElement('button');
