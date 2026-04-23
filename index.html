@@ -2752,8 +2752,17 @@ function rehydrateTables(container){
 
 // ─── SECTOR MANAGER ──────────────────────
 function openSectorMgr(){
-  renderSectorMgr();
-  document.getElementById('sector-modal').classList.add('open');
+  // Recharger depuis Firebase avant d'ouvrir
+  db.ref('sectors').once('value').then(snap=>{
+    const val=snap.val();
+    if(val && Array.isArray(val) && val.length) SECTORS=val;
+    else if(val && typeof val==='object') SECTORS=Object.values(val);
+    renderSectorMgr();
+    document.getElementById('sector-modal').classList.add('open');
+  }).catch(()=>{
+    renderSectorMgr();
+    document.getElementById('sector-modal').classList.add('open');
+  });
 }
 
 function renderSectorMgr(){
@@ -2829,8 +2838,19 @@ function renderSectorMgr(){
 
 function addSector(){
   const newSec={ id:'sec_'+Date.now(), label:'Nouveau secteur', icon:'📂', chapters:[] };
-  SECTORS.push(newSec); saveSectors(); renderSectorMgr(); renderTree();
+  SECTORS.push(newSec);
+  saveSectors();
+  renderSectorMgr();
+  renderTree();
   showToast('✓ Secteur créé');
+  // Scroller vers le bas de la liste pour voir le nouveau secteur
+  setTimeout(()=>{
+    const list=document.getElementById('sector-list');
+    if(list) list.scrollTop=list.scrollHeight;
+    // Focus sur le champ nom du nouveau secteur
+    const inputs=list.querySelectorAll('.sec-name-inp');
+    if(inputs.length) inputs[inputs.length-1].focus();
+  },100);
 }
 
 // Picker emoji inline
@@ -2857,9 +2877,22 @@ function openEmojiPicker(btn, si){
 
 // Picker chapitre
 function openChapterPicker(si){
+  // Si sections vide, recharger depuis Firebase
+  const doOpen=(secs)=>{
+    const allAssigned=SECTORS.flatMap((s,i)=>i!==si?s.chapters:[]);
+    const available=secs.filter(s=>(!s.parentId||s.parentId===null||s.parentId==='null') && !allAssigned.includes(s.id) && !SECTORS[si].chapters.includes(s.id));
+    if(!available.length){ showToast('Tous les chapitres sont déjà assignés'); return; }
+    _openChapterPickerModal(si, available);
+  };
+  if(sections.length>0){ doOpen(sections); return; }
+  db.ref('sections').once('value').then(snap=>{
+    const val=snap.val();
+    if(val) sections=Object.values(val).sort((a,b)=>(a._order||0)-(b._order||0));
+    doOpen(sections);
+  });
+}
+function _openChapterPickerModal(si, available){
   const allAssigned=SECTORS.flatMap((s,i)=>i!==si?s.chapters:[]);
-  const available=sections.filter(s=>!s.parentId && !allAssigned.includes(s.id) && !SECTORS[si].chapters.includes(s.id));
-  if(!available.length){ showToast('Tous les chapitres sont déjà assignés'); return; }
   // Modale simple de sélection
   const modal=document.getElementById('confirm-modal');
   document.getElementById('confirm-msg').innerHTML='<div style="text-align:left;max-height:200px;overflow-y:auto">'+
