@@ -362,10 +362,10 @@ a{color:var(--c)}
 .empty-msg{font-size:14px;font-weight:500}
 
 /* ─── EDIT VIEW (scroll continu) ─── */
-#edit-view{flex:1;overflow-y:auto;display:none}
+#edit-view{flex:1;overflow-y:auto;display:none!important}
 #edit-view::-webkit-scrollbar{width:5px}
 #edit-view::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-#edit-view.show{display:block}
+#edit-view.show{display:block!important}
 #edit-canvas{padding:0 0 100px}
 
 /* Doc blocks */
@@ -477,10 +477,10 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
 .block-content::after{content:'';display:table;clear:both}
 
 /* ─── READER VIEW ─── */
-#reader-view{flex:1;overflow-y:auto;display:none;background:var(--c-bg)}
+#reader-view{flex:1;overflow-y:auto;display:none!important;background:var(--c-bg)}
 #reader-view::-webkit-scrollbar{width:5px}
 #reader-view::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-#reader-view.show{display:block}
+#reader-view.show{display:block!important}
 .reader-page{max-width:740px;margin:32px auto 80px;background:white;border-radius:14px;padding:48px 56px;box-shadow:var(--shadow)}
 
 .r-ch-title{font-size:24px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--c-dd);padding-bottom:10px;border-bottom:3px solid var(--c);margin:0 0 24px;display:flex;align-items:center;gap:12px}
@@ -497,8 +497,8 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
 .r-sep{height:2px;margin:36px 0;background:linear-gradient(90deg,var(--c),transparent);opacity:.25;border-radius:2px}
 
 /* ─── PREVIEW VIEW ─── */
-#preview-view{flex:1;overflow-y:auto;display:none;background:var(--c-bg)}
-#preview-view.show{display:block}
+#preview-view{flex:1;overflow-y:auto;display:none!important;background:var(--c-bg)}
+#preview-view.show{display:block!important}
 .preview-wrap{max-width:740px;margin:32px auto 80px;background:white;border-radius:14px;padding:48px 56px;box-shadow:var(--shadow)}
 
 /* ─── BOTTOM BAR (mots-clés) ─── */
@@ -2074,16 +2074,33 @@ function renderDoc(rootId,scrollToId){
 
 // ── EDIT VIEW ────────────────────────────
 function renderEditView(blocks,scrollToId){ renderEditViewFull(blocks,scrollToId); }
+function hideAllViews(){
+  ['edit-view','reader-view','preview-view'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){ el.classList.remove('show'); el.style.removeProperty('display'); }
+  });
+  // Vider le canvas pour éviter les résidus
+  const canvas=document.getElementById('edit-canvas');
+  if(canvas && !document.getElementById('edit-view').classList.contains('show')){
+    // Ne pas vider si on reste en edit view
+  }
+}
+
 function renderEditViewFull(blocks,scrollToId){
-  document.getElementById('reader-view').classList.remove('show');
-  document.getElementById('preview-view').classList.remove('show');
+  hideAllViews();
   document.getElementById('edit-view').classList.add('show');
   document.getElementById('toolbar').style.display=viewMode==='edit'?'flex':'none';
   document.getElementById('kw-bar').classList.add('show');
   document.getElementById('breadcrumb').style.display='flex';
 
   const canvas=document.getElementById('edit-canvas');
-  canvas.innerHTML='';
+  // Vider proprement le canvas (évite les résidus de rendu précédent)
+  while(canvas.firstChild) canvas.removeChild(canvas.firstChild);
+  // S'assurer qu'on est bien en edit-view
+  document.getElementById('reader-view').style.setProperty('display','none','important');
+  document.getElementById('preview-view').style.setProperty('display','none','important');
+  document.getElementById('edit-view').style.removeProperty('display');
+  document.getElementById('edit-view').classList.add('show');
   blocks.forEach(s=>canvas.appendChild(buildBlock(s)));
   rehydrate(canvas);
   rehydrateTables(canvas);
@@ -2190,8 +2207,7 @@ function buildBlock(s){
 // ── READER VIEW ──────────────────────────
 function renderReaderView(blocks,scrollToId){ renderReaderViewFull(blocks,scrollToId); }
 function renderReaderViewFull(blocks,scrollToId){
-  document.getElementById('edit-view').classList.remove('show');
-  document.getElementById('preview-view').classList.remove('show');
+  hideAllViews();
   document.getElementById('reader-view').classList.add('show');
   document.getElementById('toolbar').style.display='none';
   document.getElementById('kw-bar').classList.remove('show');
@@ -2243,14 +2259,13 @@ function setView(v){
   viewMode=v;
   document.getElementById('ep-edit').classList.toggle('on',v==='edit');
   document.getElementById('ep-prev').classList.toggle('on',v==='preview');
+  hideAllViews();
   if(v==='edit'){
-    document.getElementById('preview-view').classList.remove('show');
     document.getElementById('edit-view').classList.add('show');
     document.getElementById('toolbar').style.display='flex';
     if(mode!=='reader') document.getElementById('kw-bar').classList.add('show');
   } else {
     saveAllBlocks();
-    document.getElementById('edit-view').classList.remove('show');
     document.getElementById('toolbar').style.display='none';
     // Preview de tout le document
     renderPreviewView(buildOrderedBlocks());
@@ -2259,6 +2274,7 @@ function setView(v){
 }
 
 function renderPreviewView(blocks){
+  hideAllViews();
   document.getElementById('preview-view').classList.add('show');
   const page=document.getElementById('preview-page');
   page.innerHTML='';
