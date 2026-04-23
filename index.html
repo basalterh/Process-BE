@@ -2932,14 +2932,13 @@ function openEmojiPicker(btn, si){
   setTimeout(()=>{ document.addEventListener('click',()=>picker.remove(),{once:true}); },50);
 }
 
-// Picker chapitre
+// Picker chapitre — affiche TOUS les chapitres, assignés ou non
 function openChapterPicker(si){
-  // Si sections vide, recharger depuis Firebase
   const doOpen=(secs)=>{
-    const allAssigned=SECTORS.flatMap((s,i)=>i!==si?s.chapters:[]);
-    const available=secs.filter(s=>(!s.parentId||s.parentId===null||s.parentId==='null') && !allAssigned.includes(s.id) && !SECTORS[si].chapters.includes(s.id));
-    if(!available.length){ showToast('Tous les chapitres sont déjà assignés'); return; }
-    _openChapterPickerModal(si, available);
+    // Tous les chapitres racine, même déjà assignés ailleurs
+    const allChapters=secs.filter(s=>(!s.parentId||s.parentId===null||s.parentId==='null'));
+    if(!allChapters.length){ showToast('Aucun chapitre dans le document'); return; }
+    _openChapterPickerModal(si, allChapters);
   };
   if(sections.length>0){ doOpen(sections); return; }
   db.ref('sections').once('value').then(snap=>{
@@ -2948,27 +2947,52 @@ function openChapterPicker(si){
     doOpen(sections);
   });
 }
-function _openChapterPickerModal(si, available){
-  const allAssigned=SECTORS.flatMap((s,i)=>i!==si?s.chapters:[]);
-  // Modale simple de sélection
+
+function _openChapterPickerModal(si, allChapters){
+  const currentSectorLabel=SECTORS[si]?.label||'ce secteur';
   const modal=document.getElementById('confirm-modal');
-  document.getElementById('confirm-msg').innerHTML='<div style="text-align:left;max-height:200px;overflow-y:auto">'+
-    available.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer"><input type="checkbox" value="${s.id}" style="width:14px;height:14px"> <span style="font-size:13px">${s.title}</span></label>`).join('')+
-    '</div>';
+
+  // Construire la liste avec indication du secteur actuel de chaque chapitre
+  const rows=allChapters.map(s=>{
+    const alreadyHere=SECTORS[si].chapters.includes(s.id);
+    const otherSector=SECTORS.find((sec,i)=>i!==si&&(sec.chapters||[]).includes(s.id));
+    const badge=alreadyHere
+      ? '<span style="font-size:10px;background:#dcfce7;color:#16a34a;padding:1px 6px;border-radius:10px;margin-left:6px">✓ déjà ici</span>'
+      : otherSector
+        ? '<span style="font-size:10px;background:#fef9c3;color:#92400e;padding:1px 6px;border-radius:10px;margin-left:6px">dans "'+otherSector.label+'"</span>'
+        : '<span style="font-size:10px;background:#f1f5f9;color:#64748b;padding:1px 6px;border-radius:10px;margin-left:6px">non assigné</span>';
+    return `<label style="display:flex;align-items:center;gap:8px;padding:6px 4px;cursor:pointer;border-radius:6px" onmouseover="this.style.background='#f0fdff'" onmouseout="this.style.background=''">
+      <input type="checkbox" value="${s.id}" ${alreadyHere?'checked':''} style="width:14px;height:14px;flex-shrink:0">
+      <span style="font-size:13px;flex:1">${s.title}</span>${badge}
+    </label>`;
+  }).join('');
+
+  document.getElementById('confirm-msg').innerHTML=
+    '<div style="font-size:11px;color:var(--muted);margin-bottom:8px">Cochez les chapitres à inclure dans <b>'+currentSectorLabel+'</b>. Un chapitre coché ici sera retiré de son secteur actuel.</div>'+
+    '<div style="text-align:left;max-height:260px;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;padding:6px">'+rows+'</div>';
+
   document.getElementById('confirm-modal').classList.add('open');
   document.querySelector('.confirm-icon').textContent='📁';
-  document.getElementById('confirm-ok').textContent='Ajouter';
+  document.getElementById('confirm-ok').textContent='Valider';
   document.getElementById('confirm-ok').onclick=()=>{
-    document.querySelectorAll('#confirm-msg input[type=checkbox]:checked').forEach(cb=>{
-      SECTORS[si].chapters.push(cb.value);
+    const checked=[...document.querySelectorAll('#confirm-msg input[type=checkbox]:checked')].map(cb=>cb.value);
+    const unchecked=[...document.querySelectorAll('#confirm-msg input[type=checkbox]:not(:checked)')].map(cb=>cb.value);
+
+    // Retirer des autres secteurs les chapitres cochés ici
+    checked.forEach(id=>{
+      SECTORS.forEach((sec,i)=>{ if(i!==si) sec.chapters=(sec.chapters||[]).filter(c=>c!==id); });
     });
+    // Retirer de CE secteur les chapitres décochés
+    unchecked.forEach(id=>{ SECTORS[si].chapters=(SECTORS[si].chapters||[]).filter(c=>c!==id); });
+    // Ajouter à CE secteur les chapitres cochés
+    checked.forEach(id=>{ if(!SECTORS[si].chapters.includes(id)) SECTORS[si].chapters.push(id); });
+
     saveSectors(); renderSectorMgr(); renderTree();
     closeOverlay('confirm-modal');
-    // Restore confirm button
     document.getElementById('confirm-ok').textContent='Supprimer';
     document.getElementById('confirm-ok').onclick=()=>{ closeOverlay('confirm-modal'); if(_confirmCb){_confirmCb();_confirmCb=null;} };
     document.querySelector('.confirm-icon').textContent='🗑';
-    showToast('✓ Chapitre(s) ajouté(s)');
+    showToast('✓ Chapitres mis à jour');
   };
 }
 // ─── LIEN INTERNE ────────────────────────
