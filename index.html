@@ -1752,9 +1752,13 @@ function loadSectors(){
   // Charger depuis Firebase en priorité, localStorage en fallback
   db.ref('sectors').once('value').then(snap=>{
     const val = snap.val();
-    if(val && Array.isArray(val) && val.length){
-      SECTORS = val;
-    } else {
+    if(val){
+      // Firebase peut retourner un objet {} ou un tableau []
+      const arr = Array.isArray(val) ? val : Object.values(val);
+      // Nettoyer : retirer les null/undefined et s'assurer que chapters est un tableau
+      SECTORS = arr.filter(Boolean).map(s=>({...s, chapters: Array.isArray(s.chapters)?s.chapters:[]}));
+    }
+    if(!SECTORS || !SECTORS.length){
       try{ const r=localStorage.getItem(SK+'_sectors'); SECTORS=r?JSON.parse(r):[...DEFAULT_SECTORS]; }
       catch(e){ SECTORS=[...DEFAULT_SECTORS]; }
       // Pousser vers Firebase
@@ -1766,7 +1770,13 @@ function loadSectors(){
     catch(e){ SECTORS=[...DEFAULT_SECTORS]; }
   });
 }
-function saveSectors(){ localStorage.setItem(SK+'_sectors',JSON.stringify(SECTORS)); db.ref('sectors').set(SECTORS); }
+function saveSectors(){
+  // Normaliser : s'assurer que chaque secteur a chapters[]
+  const clean = (Array.isArray(SECTORS)?SECTORS:[]).filter(Boolean).map(s=>({...s,chapters:Array.isArray(s.chapters)?s.chapters:[]}));
+  SECTORS = clean;
+  localStorage.setItem(SK+'_sectors',JSON.stringify(clean));
+  db.ref('sectors').set(clean);
+}
 
 let sectorOpen = {};
 
@@ -1780,13 +1790,16 @@ function renderTree(q){
     return;
   }
 
-  const allSectorChapters = SECTORS.flatMap(s=>s.chapters);
+  const allSectorChapters = SECTORS.flatMap(s=>s.chapters||[]);
 
   SECTORS.forEach(sec=>{
-    const secChapters = sec.chapters
+    if(!sec) return; // secteur undefined/null
+    const chapters = Array.isArray(sec.chapters) ? sec.chapters : [];
+    const secChapters = chapters
       .map(id=>sections.find(s=>s.id===id))
       .filter(Boolean);
-    if(!secChapters.length) return;
+    // Afficher le secteur même s'il n'a pas encore de chapitres (nouveau secteur)
+    const isEmpty = secChapters.length===0;
 
     const isOpen = !!sectorOpen[sec.id];
     const srow = document.createElement('div');
@@ -2755,8 +2768,10 @@ function openSectorMgr(){
   // Recharger depuis Firebase avant d'ouvrir
   db.ref('sectors').once('value').then(snap=>{
     const val=snap.val();
-    if(val && Array.isArray(val) && val.length) SECTORS=val;
-    else if(val && typeof val==='object') SECTORS=Object.values(val);
+    if(val){
+      const arr=Array.isArray(val)?val:Object.values(val);
+      SECTORS=arr.filter(Boolean).map(s=>({...s,chapters:Array.isArray(s.chapters)?s.chapters:[]}));
+    }
     renderSectorMgr();
     document.getElementById('sector-modal').classList.add('open');
   }).catch(()=>{
@@ -2768,6 +2783,10 @@ function openSectorMgr(){
 function renderSectorMgr(){
   const list=document.getElementById('sector-list');
   list.innerHTML='';
+  if(!Array.isArray(SECTORS)||!SECTORS.length){
+    list.innerHTML='<div style="padding:20px;text-align:center;color:var(--muted);font-size:13px">Aucun secteur — cliquez "+ Nouveau secteur"</div>';
+    return;
+  }
   SECTORS.forEach((sec,si)=>{
     const card=document.createElement('div');
     card.className='sec-card';
@@ -2837,19 +2856,29 @@ function renderSectorMgr(){
 }
 
 function addSector(){
+  // S'assurer que SECTORS est un tableau valide
+  if(!Array.isArray(SECTORS)) SECTORS=[];
+
   const newSec={ id:'sec_'+Date.now(), label:'Nouveau secteur', icon:'📂', chapters:[] };
-  SECTORS.push(newSec);
-  saveSectors();
+  SECTORS=[...SECTORS, newSec];
+
+  // Sauvegarder dans Firebase ET localStorage
+  try{ localStorage.setItem(SK+'_sectors', JSON.stringify(SECTORS)); } catch(e){}
+  db.ref('sectors').set(SECTORS).then(()=>{
+    showToast('✓ Secteur créé');
+  }).catch(e=>{
+    showToast('✓ Secteur créé (local)');
+  });
+
   renderSectorMgr();
   renderTree();
-  showToast('✓ Secteur créé');
-  // Scroller vers le bas de la liste pour voir le nouveau secteur
+
   setTimeout(()=>{
     const list=document.getElementById('sector-list');
     if(list) list.scrollTop=list.scrollHeight;
-    // Focus sur le champ nom du nouveau secteur
     const inputs=list.querySelectorAll('.sec-name-inp');
     if(inputs.length) inputs[inputs.length-1].focus();
+    inputs[inputs.length-1]?.select();
   },100);
 }
 
