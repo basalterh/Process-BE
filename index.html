@@ -2888,7 +2888,8 @@ function buildSectionList(){
   const typeClass={chapter:'ch',subchapter:'sc',section:'se',paragraph:'pa'};
   function collect(parentId,prefix){
     let idx=0;
-    sections.filter(s=>s.parentId===parentId).forEach(s=>{
+    // Normaliser parentId (null vs undefined vs "null")
+    sections.filter(s=>(s.parentId||null)===(parentId||null)).forEach(s=>{
       if(s.type!=='paragraph') idx++;
       const num=s.type==='paragraph'?'◆':(prefix?prefix+'.'+idx:String(idx));
       items.push({id:s.id,title:s.title||'(sans titre)',num,type:s.type,cls:typeClass[s.type]||'se'});
@@ -2902,16 +2903,37 @@ function buildSectionList(){
 // ── MÉTHODE 1 : bouton toolbar ──
 function openIlinkPicker(){
   saveSel();
-  const sel=document.getElementById('ilink-select');
-  sel.innerHTML='<option value="">— Choisir une section —</option>';
-  const typeLabel={chapter:'📁 Chapitre',subchapter:'📖 Sous-chap.',section:'📄 Section',paragraph:'◆ §'};
-  buildSectionList().forEach(item=>{
-    const o=document.createElement('option');
-    o.value=item.id;
-    o.textContent=(item.num?'['+item.num+'] ':'')+item.title+' ('+( typeLabel[item.type]||item.type)+')';
-    sel.appendChild(o);
-  });
+  const selectEl=document.getElementById('ilink-select');
+  selectEl.innerHTML='<option value="">Chargement…</option>';
   document.getElementById('ilink-modal').classList.add('open');
+
+  // Lire depuis Firebase directement pour être sûr d'avoir les données
+  db.ref('sections').once('value').then(snap=>{
+    const val=snap.val();
+    if(val){
+      const loaded=Object.values(val).sort((a,b)=>(a._order||0)-(b._order||0));
+      // Mettre à jour sections si nécessaire
+      if(!sections.length) sections=loaded;
+    }
+    selectEl.innerHTML='<option value="">— Choisir une section —</option>';
+    const typeLabel={chapter:'📁 Chapitre',subchapter:'📖 Sous-chap.',section:'📄 Section',paragraph:'◆ §'};
+    buildSectionList().forEach(item=>{
+      const o=document.createElement('option');
+      o.value=item.id;
+      o.textContent=(item.num?'['+item.num+'] ':'')+item.title+' ('+(typeLabel[item.type]||item.type)+')';
+      selectEl.appendChild(o);
+    });
+  }).catch(()=>{
+    // Fallback : utiliser sections en mémoire
+    selectEl.innerHTML='<option value="">— Choisir une section —</option>';
+    const typeLabel={chapter:'📁 Chapitre',subchapter:'📖 Sous-chap.',section:'📄 Section',paragraph:'◆ §'};
+    buildSectionList().forEach(item=>{
+      const o=document.createElement('option');
+      o.value=item.id;
+      o.textContent=(item.num?'['+item.num+'] ':'')+item.title+' ('+(typeLabel[item.type]||item.type)+')';
+      selectEl.appendChild(o);
+    });
+  });
 }
 
 function confirmIlink(){
