@@ -2008,13 +2008,29 @@ function selectSection(id){
 }
 
 function renderFullDoc(scrollToId){
-  // Construire tous les blocs de tous les chapitres racine dans l'ordre
-  const allRoots = sections.filter(s=>!s.parentId);
+  // Construire les blocs dans l'ordre des secteurs, puis chapitres non assignés
   const allBlocks = [];
-  allRoots.forEach(root=>{
+  const assigned = new Set();
+
+  if(Array.isArray(SECTORS) && SECTORS.length){
+    SECTORS.forEach(sec=>{
+      if(!sec) return;
+      (sec.chapters||[]).forEach(id=>{
+        const root=sections.find(s=>s.id===id);
+        if(!root) return;
+        assigned.add(id);
+        allBlocks.push(root);
+        descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));
+      });
+    });
+  }
+
+  // Chapitres non assignés à aucun secteur → à la fin
+  sections.filter(s=>!s.parentId && !assigned.has(s.id)).forEach(root=>{
     allBlocks.push(root);
     descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));
   });
+
   curChapterId = 'all';
 
   if(mode==='reader' || viewMode==='preview'){
@@ -2221,10 +2237,24 @@ function setView(v){
     document.getElementById('edit-view').classList.remove('show');
     document.getElementById('toolbar').style.display='none';
     // Preview de tout le document
-    const allRoots=sections.filter(s=>!s.parentId);
-    const allBlocks=[];
-    allRoots.forEach(root=>{allBlocks.push(root);descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));});
-    renderPreviewView(allBlocks);
+    const allBlocks2=[];
+    const assigned2=new Set();
+    if(Array.isArray(SECTORS)&&SECTORS.length){
+      SECTORS.forEach(sec=>{
+        if(!sec) return;
+        (sec.chapters||[]).forEach(id=>{
+          const root=sections.find(s=>s.id===id);
+          if(!root) return;
+          assigned2.add(id);
+          allBlocks2.push(root);
+          descendantsOrdered(root.id).forEach(s=>allBlocks2.push(s));
+        });
+      });
+    }
+    sections.filter(s=>!s.parentId&&!assigned2.has(s.id)).forEach(root=>{
+      allBlocks2.push(root);descendantsOrdered(root.id).forEach(s=>allBlocks2.push(s));
+    });
+    renderPreviewView(allBlocks2);
     if(curId){const el=document.querySelector(`.doc-block[data-id="${curId}"]`);if(el) el.scrollIntoView({behavior:'smooth',block:'start'});}
   }
 }
