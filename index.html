@@ -2795,12 +2795,33 @@ function renderSectorMgr(){
     const head=document.createElement('div');
     head.className='sec-card-head';
 
-    // Poignée drag
-    const handle=document.createElement('span');
-    handle.textContent='⠿';
-    handle.style.cssText='color:var(--muted);font-size:16px;cursor:grab;flex-shrink:0;padding:0 4px';
-    handle.title='Glisser pour réordonner';
-    head.appendChild(handle);
+    // Boutons ↑ ↓
+    const upBtn=document.createElement('button');
+    upBtn.textContent='↑'; upBtn.title='Monter';
+    upBtn.style.cssText='width:26px;height:26px;border-radius:5px;border:1.5px solid var(--border);background:var(--c-bg);color:var(--text2);font-size:13px;cursor:pointer;flex-shrink:0;transition:.12s;display:flex;align-items:center;justify-content:center';
+    upBtn.onmouseover=()=>upBtn.style.background='var(--c-xl)';
+    upBtn.onmouseout=()=>upBtn.style.background='var(--c-bg)';
+    upBtn.onclick=()=>{
+      if(si===0) return;
+      const tmp=SECTORS[si-1]; SECTORS[si-1]=SECTORS[si]; SECTORS[si]=tmp;
+      saveSectors(); renderSectorMgr(); renderTree(); showToast('↑ Secteur déplacé');
+    };
+    if(si===0) upBtn.style.opacity='.3';
+
+    const downBtn=document.createElement('button');
+    downBtn.textContent='↓'; downBtn.title='Descendre';
+    downBtn.style.cssText='width:26px;height:26px;border-radius:5px;border:1.5px solid var(--border);background:var(--c-bg);color:var(--text2);font-size:13px;cursor:pointer;flex-shrink:0;transition:.12s;display:flex;align-items:center;justify-content:center';
+    downBtn.onmouseover=()=>downBtn.style.background='var(--c-xl)';
+    downBtn.onmouseout=()=>downBtn.style.background='var(--c-bg)';
+    downBtn.onclick=()=>{
+      if(si===SECTORS.length-1) return;
+      const tmp=SECTORS[si+1]; SECTORS[si+1]=SECTORS[si]; SECTORS[si]=tmp;
+      saveSectors(); renderSectorMgr(); renderTree(); showToast('↓ Secteur déplacé');
+    };
+    if(si===SECTORS.length-1) downBtn.style.opacity='.3';
+
+    head.appendChild(upBtn);
+    head.appendChild(downBtn);
 
     // Icône cliquable
     const iconBtn=document.createElement('button');
