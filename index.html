@@ -1206,6 +1206,58 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
   </div>
 </div>
 
+<!-- PDF Export Modal -->
+<div class="overlay" id="pdf-modal" style="z-index:1050">
+  <div class="modal" style="width:500px;max-height:85vh">
+    <h3>📄 Exporter en PDF</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Choisissez ce que vous souhaitez exporter.</p>
+
+    <!-- Scope -->
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:.12s" onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
+        <input type="radio" name="pdf-scope" value="all" checked style="width:15px;height:15px">
+        <div><div style="font-size:13px;font-weight:700;color:var(--text)">📚 Document complet</div><div style="font-size:11px;color:var(--muted)">Tous les secteurs et chapitres</div></div>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:.12s" onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
+        <input type="radio" name="pdf-scope" value="sector" style="width:15px;height:15px" onchange="document.getElementById('pdf-sector-pick').style.display='block';document.getElementById('pdf-chapter-pick').style.display='none'">
+        <div><div style="font-size:13px;font-weight:700;color:var(--text)">🗂 Un secteur</div><div style="font-size:11px;color:var(--muted)">Tous les chapitres d'un secteur</div></div>
+      </label>
+      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:.12s" onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
+        <input type="radio" name="pdf-scope" value="chapter" style="width:15px;height:15px" onchange="document.getElementById('pdf-chapter-pick').style.display='block';document.getElementById('pdf-sector-pick').style.display='none'">
+        <div><div style="font-size:13px;font-weight:700;color:var(--text)">📁 Un chapitre</div><div style="font-size:11px;color:var(--muted)">Un chapitre et ses sous-sections</div></div>
+      </label>
+    </div>
+
+    <!-- Sélection secteur -->
+    <div id="pdf-sector-pick" style="display:none;margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Secteur :</label>
+      <select id="pdf-sector-sel" style="width:100%;padding:8px 12px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;outline:none"></select>
+    </div>
+
+    <!-- Sélection chapitre -->
+    <div id="pdf-chapter-pick" style="display:none;margin-bottom:12px">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Chapitre :</label>
+      <select id="pdf-chapter-sel" style="width:100%;padding:8px 12px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;outline:none"></select>
+    </div>
+
+    <!-- Options -->
+    <div style="padding:10px 12px;background:var(--c-bg);border-radius:8px;border:1.5px solid var(--border);margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Options</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" id="pdf-header" checked style="width:14px;height:14px"> Afficher le titre du document en en-tête
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer">
+        <input type="checkbox" id="pdf-pagenum" checked style="width:14px;height:14px"> Numéros de page
+      </label>
+    </div>
+
+    <div class="modal-acts">
+      <button class="btn-cancel" onclick="closeOverlay('pdf-modal')">Annuler</button>
+      <button class="btn-ok" onclick="doPdfExport()">📄 Générer le PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- Confirm modal -->
 <div class="overlay" id="confirm-modal" style="z-index:1100">
   <div class="modal" style="width:360px;text-align:center">
@@ -3694,7 +3746,134 @@ function exportHTML(){
   a.download='process-be.html';a.click();
   showToast('⬇ Export HTML');
 }
-function exportPDF(){ saveAllBlocks();window.print(); }
+function exportPDF(){
+  saveAllBlocks();
+  // Remplir les sélecteurs
+  const secSel=document.getElementById('pdf-sector-sel');
+  const chSel=document.getElementById('pdf-chapter-sel');
+  secSel.innerHTML='';
+  chSel.innerHTML='';
+  // Secteurs
+  (SECTORS||[]).filter(Boolean).forEach(sec=>{
+    const o=document.createElement('option');
+    o.value=sec.id; o.textContent=(sec.icon||'')+' '+sec.label;
+    secSel.appendChild(o);
+  });
+  // Chapitres
+  sections.filter(s=>!s.parentId||s.parentId===null||s.parentId==='null').forEach(ch=>{
+    const o=document.createElement('option');
+    o.value=ch.id; o.textContent=ch.title;
+    chSel.appendChild(o);
+  });
+  // Reset radio
+  document.querySelector('input[name="pdf-scope"][value="all"]').checked=true;
+  document.getElementById('pdf-sector-pick').style.display='none';
+  document.getElementById('pdf-chapter-pick').style.display='none';
+  document.getElementById('pdf-modal').classList.add('open');
+}
+
+function doPdfExport(){
+  closeOverlay('pdf-modal');
+  const scope=document.querySelector('input[name="pdf-scope"]:checked').value;
+  const showHeader=document.getElementById('pdf-header').checked;
+  const showPageNum=document.getElementById('pdf-pagenum').checked;
+
+  // Construire les blocs à imprimer
+  let blocks=[];
+  let title='Process BE';
+
+  if(scope==='all'){
+    blocks=buildOrderedBlocks().filter(b=>!b._sector);
+  } else if(scope==='sector'){
+    const secId=document.getElementById('pdf-sector-sel').value;
+    const sec=SECTORS.find(s=>s.id===secId);
+    if(sec){
+      title=sec.label;
+      (sec.chapters||[]).forEach(id=>{
+        const root=sections.find(s=>s.id===id);
+        if(!root) return;
+        blocks.push(root);
+        descendantsOrdered(root.id).forEach(s=>blocks.push(s));
+      });
+    }
+  } else {
+    const chId=document.getElementById('pdf-chapter-sel').value;
+    const root=sections.find(s=>s.id===chId);
+    if(root){
+      title=root.title;
+      blocks=[root,...descendantsOrdered(root.id)];
+    }
+  }
+
+  if(!blocks.length){ showToast('Aucun contenu à exporter'); return; }
+
+  // Générer le HTML d'impression
+  const printHtml=generatePrintHtml(blocks, title, showHeader, showPageNum);
+
+  // Ouvrir dans une fenêtre et imprimer
+  const win=window.open('','_blank','width=900,height=700');
+  win.document.write(printHtml);
+  win.document.close();
+  win.onload=()=>{ setTimeout(()=>{ win.print(); }, 500); };
+}
+
+function generatePrintHtml(blocks, title, showHeader, showPageNum){
+  const typeTag={chapter:'h1',subchapter:'h2',section:'h3',paragraph:'h4'};
+  const typeClass={chapter:'p-ch',subchapter:'p-sc',section:'p-se',paragraph:'p-pa'};
+
+  let body='';
+  blocks.forEach(s=>{
+    const n=secNum(s);
+    const tag=typeTag[s.type]||'h4';
+    const cls=typeClass[s.type]||'p-se';
+    if(s.title){
+      body+=`<div class="p-block ${cls}">`;
+      body+=`<${tag}>${n?'<span class="p-num">'+n+'</span> ':''} ${s.title}</${tag}>`;
+      if(s.content) body+=`<div class="p-content">${s.content}</div>`;
+      body+=`</div>`;
+    } else if(s.content){
+      body+=`<div class="p-block ${cls}"><div class="p-content">${s.content}</div></div>`;
+    }
+  });
+
+  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8">
+<title>${title}</title>
+<style>
+  @page { margin:20mm 18mm; ${showPageNum?"counter-increment:page;":""} }
+  ${showPageNum?`@page { @bottom-right { content: "Page " counter(page); font-size:10px; color:#666; } }`:''}
+  body { font-family:'Segoe UI',Arial,sans-serif; font-size:11pt; color:#0c4a6e; line-height:1.6; }
+  ${showHeader?`body::before { content:"${title.replace(/"/g,"'")}"; display:block; font-size:9pt; font-weight:700; color:#0891b2; text-transform:uppercase; letter-spacing:2px; border-bottom:2px solid #0891b2; padding-bottom:6px; margin-bottom:20px; }`:''}
+  h1 { font-size:18pt; text-transform:uppercase; letter-spacing:.5px; color:#0c4a6e; border-bottom:3px solid #0891b2; padding-bottom:6px; margin:24pt 0 10pt; page-break-after:avoid; }
+  h2 { font-size:14pt; text-transform:uppercase; color:#0369a1; margin:18pt 0 8pt; page-break-after:avoid; }
+  h3 { font-size:12pt; font-weight:700; color:#0369a1; margin:14pt 0 6pt; page-break-after:avoid; }
+  h4 { font-size:11pt; font-weight:600; color:#0369a1; margin:10pt 0 4pt; }
+  .p-num { background:#0891b2; color:white; font-family:monospace; font-size:9pt; padding:1px 6px; border-radius:4px; margin-right:6px; }
+  .p-content { margin:0 0 8pt; }
+  .p-content ul,.p-content ol { padding-left:18pt; margin:4pt 0; }
+  .p-content li { margin-bottom:2pt; }
+  /* Encadrés */
+  .doc-box { padding:8pt 12pt; border-radius:5pt; border-left:4pt solid; margin:8pt 0; page-break-inside:avoid; }
+  .doc-box[data-t="info"]   { border-color:#0891b2; background:#ecfeff; }
+  .doc-box[data-t="warn"]   { border-color:#f59e0b; background:#fffbeb; }
+  .doc-box[data-t="danger"] { border-color:#ef4444; background:#fef2f2; }
+  .doc-box[data-t="ok"]     { border-color:#22c55e; background:#f0fdf4; }
+  .doc-box[data-t="note"]   { border-color:#8b5cf6; background:#faf5ff; }
+  .doc-box[data-t="grey"]   { border-color:#64748b; background:#f8fafc; }
+  /* Tableaux */
+  table { border-collapse:collapse; width:100%; margin:8pt 0; font-size:10pt; page-break-inside:auto; }
+  th { background:#0891b2; color:white; padding:6pt 8pt; text-align:left; font-size:9pt; }
+  td { padding:5pt 8pt; border-bottom:1pt solid #e2e8f0; }
+  tr:nth-child(even) td { background:#f8fafc; }
+  /* Séparateurs */
+  .doc-sep { border:none; border-top:1.5pt solid #0891b2; margin:12pt 0; }
+  /* Bouton suppr masqué */
+  .box-del { display:none !important; }
+  .tbl-actions { display:none !important; }
+  img { max-width:100%; border-radius:4pt; }
+  @media print { .p-ch { page-break-before:always; } .p-ch:first-child { page-break-before:avoid; } }
+</style>
+</head><body>${body}</body></html>`;
+}
 
 // ─── SIDEBAR TOGGLE ──────────────────────
 function toggleSidebar(){
