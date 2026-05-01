@@ -2499,30 +2499,58 @@ function insertBox(t){
   box.className='doc-box';box.setAttribute('data-t',t);box.contentEditable='true';box.textContent=labels[t]+' : ';
   const del=document.createElement('button');del.className='box-del';del.textContent='✕';del.contentEditable='false';
   box.appendChild(del);
-  // Entrée en fin d'encadré → sortir et créer un paragraphe après
+  // Entrée dans encadré :
+  // - Entrée normal = retour à la ligne dans l'encadré
+  // - Entrée sur une ligne vide en fin = sortir de l'encadré
   box.addEventListener('keydown',e=>{
     if(e.key!=='Enter'||e.shiftKey) return;
     const sel=window.getSelection();if(!sel?.rangeCount) return;
     const r=sel.getRangeAt(0);
-    const atEnd=r.collapsed&&r.endOffset===box.innerText.length;
-    if(!atEnd) return;
-    e.preventDefault();
-    const p=document.createElement('p');p.innerHTML='<br>';
-    box.after(p);
-    const r2=document.createRange();r2.setStart(p,0);r2.collapse(true);
-    sel.removeAllRanges();sel.addRange(r2);
-    const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
+    if(!r.collapsed) return; // sélection → comportement normal
+
+    // Vérifier si on est sur une ligne vide
+    const node=r.startContainer;
+    const lineEmpty=(node.nodeType===Node.TEXT_NODE&&node.textContent.trim()===''&&r.startOffset===0)||
+                    (node===box&&box.innerText.trim()==='');
+
+    if(lineEmpty){
+      // Ligne vide → sortir de l'encadré
+      e.preventDefault();
+      // Trouver ou créer un <p> après l'encadré
+      let pNext=box.nextElementSibling;
+      if(!pNext||pNext.tagName!=='P'){
+        pNext=document.createElement('p');pNext.innerHTML='<br>';
+        box.after(pNext);
+      }
+      const r2=document.createRange();r2.setStart(pNext,0);r2.collapse(true);
+      sel.removeAllRanges();sel.addRange(r2);
+      const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
+    }
+    // Sinon : Entrée normale → retour à la ligne dans l'encadré (comportement navigateur)
   });
   const sel=window.getSelection();
-  // Insérer après la position actuelle
-  if(sel?.rangeCount){const r=sel.getRangeAt(0);r.collapse(false);r.insertNode(box);}
-  else el.appendChild(box);
-  // Ajouter un paragraphe vide après l'encadré pour pouvoir écrire après
+  // Paragraphe vide AVANT l'encadré
+  const pBefore=document.createElement('p');pBefore.innerHTML='<br>';
+  // Paragraphe vide APRÈS l'encadré
   const pAfter=document.createElement('p');pAfter.innerHTML='<br>';
-  box.after(pAfter);
-  // Placer le curseur DANS l'encadré
-  const r2=document.createRange();r2.selectNodeContents(box);r2.collapse(false);
-  sel.removeAllRanges();sel.addRange(r2);
+
+  if(sel?.rangeCount){
+    const r=sel.getRangeAt(0);r.collapse(false);
+    r.insertNode(pAfter);
+    r.insertNode(box);
+    r.insertNode(pBefore);
+  } else {
+    el.appendChild(pBefore);
+    el.appendChild(box);
+    el.appendChild(pAfter);
+  }
+  // Placer le curseur DANS l'encadré (après le label)
+  requestAnimationFrame(()=>{
+    const r2=document.createRange();
+    r2.selectNodeContents(box);r2.collapse(false);
+    const s2=window.getSelection();s2.removeAllRanges();s2.addRange(r2);
+    box.focus();
+  });
   const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
 }
 function insertSep(t){
