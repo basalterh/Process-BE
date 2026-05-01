@@ -639,11 +639,20 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
 
 /* Barre d'action tableau au survol */
 .doc-table-wrap .tbl-actions{
-  display:none; position:absolute; top:-30px; right:0;
-  background:var(--c-dd); border-radius:7px; padding:3px 6px;
-  gap:3px; white-space:nowrap;
+  display:flex; position:relative; top:0; right:0;
+  background:var(--c-bg); border-radius:0 0 8px 8px;
+  border-top:1.5px solid var(--border);
+  padding:4px 8px; gap:4px; white-space:nowrap; flex-wrap:wrap;
 }
-.doc-table-wrap:hover .tbl-actions{ display:flex; }
+.tbl-act-btn{
+  border:1.5px solid var(--border); background:white; color:var(--text2);
+  font-size:11px; font-weight:700; cursor:pointer; padding:3px 8px;
+  border-radius:5px; font-family:inherit; transition:.12s;
+}
+.tbl-act-btn:hover{ background:var(--c-bg2); border-color:var(--c); color:var(--c); }
+.tbl-act-btn.red{ color:#ef4444; border-color:#fca5a5; }
+.tbl-act-btn.red:hover{ background:#fee2e2; border-color:#ef4444; }
+body.reader-mode .doc-table-wrap .tbl-actions{ display:none!important }
 .tbl-act-btn{
   border:none; background:none; color:#a5f3fc; font-size:11px;
   font-weight:700; cursor:pointer; padding:2px 6px; border-radius:4px;
@@ -755,6 +764,21 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
 .ilink-num.se{background:var(--c);font-size:9px}
 .ilink-title{font-size:13px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ilink-type{font-size:10px;color:var(--muted);margin-left:auto;flex-shrink:0}
+
+/* ─── SECTOR DIVIDER dans le document ─── */
+.sector-divider{
+  display:flex;align-items:center;gap:14px;
+  padding:28px 24px 16px;
+  margin:0;
+  border-bottom:3px solid var(--c);
+  background:linear-gradient(135deg,var(--c-bg2) 0%,white 100%);
+  position:sticky;top:0;z-index:10;
+}
+.sd-icon{font-size:28px;flex-shrink:0}
+.sd-label{
+  font-size:20px;font-weight:800;text-transform:uppercase;
+  letter-spacing:1px;color:var(--c-dd);
+}
 
 /* ─── TOAST ─── */
 #toast{
@@ -2020,16 +2044,18 @@ function selectSection(id){
 }
 
 function buildOrderedBlocks(){
-  // Ordre = ordre des secteurs → ordre des chapitres dans chaque secteur
+  // Retourne des blocs avec marqueurs de secteur {_sector: true, ...}
   const allBlocks=[];
   const assigned=new Set();
   if(Array.isArray(SECTORS)&&SECTORS.length){
     SECTORS.forEach(sec=>{
       if(!sec) return;
-      (sec.chapters||[]).forEach(id=>{
-        const root=sections.find(s=>s.id===id);
-        if(!root) return;
-        assigned.add(id);
+      const secChaps=(sec.chapters||[]).map(id=>sections.find(s=>s.id===id)).filter(Boolean);
+      if(!secChaps.length) return;
+      // Marqueur de secteur
+      allBlocks.push({_sector:true, id:'sector_'+sec.id, label:sec.label, icon:sec.icon});
+      secChaps.forEach(root=>{
+        assigned.add(root.id);
         allBlocks.push(root);
         descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));
       });
@@ -2041,6 +2067,14 @@ function buildOrderedBlocks(){
     descendantsOrdered(root.id).forEach(s=>allBlocks.push(s));
   });
   return allBlocks;
+}
+
+function buildSectorDivider(sec){
+  const div=document.createElement('div');
+  div.className='sector-divider';
+  div.dataset.sector=sec.id;
+  div.innerHTML=`<span class="sd-icon">${sec.icon||'📁'}</span><span class="sd-label">${sec.label}</span>`;
+  return div;
 }
 
 function renderFullDoc(scrollToId){
@@ -2101,7 +2135,10 @@ function renderEditViewFull(blocks,scrollToId){
   document.getElementById('preview-view').style.setProperty('display','none','important');
   document.getElementById('edit-view').style.removeProperty('display');
   document.getElementById('edit-view').classList.add('show');
-  blocks.forEach(s=>canvas.appendChild(buildBlock(s)));
+  blocks.forEach(s=>{
+    if(s._sector){ canvas.appendChild(buildSectorDivider(s)); }
+    else { canvas.appendChild(buildBlock(s)); }
+  });
   rehydrate(canvas);
   rehydrateTables(canvas);
 
@@ -2216,8 +2253,16 @@ function renderReaderViewFull(blocks,scrollToId){
   const page=document.getElementById('reader-page');
   page.innerHTML='';
   blocks.forEach((s,i)=>{
+    if(s._sector){
+      const sd=document.createElement('div');
+      sd.className='sector-divider';
+      sd.dataset.sector=s.id;
+      sd.innerHTML=`<span class="sd-icon">${s.icon||'📁'}</span><span class="sd-label">${s.label}</span>`;
+      page.appendChild(sd);
+      return;
+    }
     const n=secNum(s);
-    if(s.type==='chapter'&&i>0){
+    if(s.type==='chapter'&&i>0&&!blocks[i-1]?._sector){
       const sep=document.createElement('div'); sep.className='r-sep'; page.appendChild(sep);
     }
     if(s.title){
@@ -2341,7 +2386,7 @@ function setupObserver(){
       if(id!==curId){curId=id;renderBreadcrumb(id);updateKwBar(sections.find(s=>s.id===id));highlightTree(id);}
     }
   },{root:wrap,threshold:0.25});
-  document.querySelectorAll('.doc-block').forEach(b=>sbObs.observe(b));
+  document.querySelectorAll('.doc-block,.sector-divider').forEach(b=>sbObs.observe(b));
 }
 
 function setActiveBlock(id){
@@ -2454,10 +2499,31 @@ function insertBox(t){
   box.className='doc-box';box.setAttribute('data-t',t);box.contentEditable='true';box.textContent=labels[t]+' : ';
   const del=document.createElement('button');del.className='box-del';del.textContent='✕';del.contentEditable='false';
   box.appendChild(del);
+  // Entrée en fin d'encadré → sortir et créer un paragraphe après
+  box.addEventListener('keydown',e=>{
+    if(e.key!=='Enter'||e.shiftKey) return;
+    const sel=window.getSelection();if(!sel?.rangeCount) return;
+    const r=sel.getRangeAt(0);
+    const atEnd=r.collapsed&&r.endOffset===box.innerText.length;
+    if(!atEnd) return;
+    e.preventDefault();
+    const p=document.createElement('p');p.innerHTML='<br>';
+    box.after(p);
+    const r2=document.createRange();r2.setStart(p,0);r2.collapse(true);
+    sel.removeAllRanges();sel.addRange(r2);
+    const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
+  });
   const sel=window.getSelection();
+  // Insérer après la position actuelle
   if(sel?.rangeCount){const r=sel.getRangeAt(0);r.collapse(false);r.insertNode(box);}
   else el.appendChild(box);
-  const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveData();}
+  // Ajouter un paragraphe vide après l'encadré pour pouvoir écrire après
+  const pAfter=document.createElement('p');pAfter.innerHTML='<br>';
+  box.after(pAfter);
+  // Placer le curseur DANS l'encadré
+  const r2=document.createRange();r2.selectNodeContents(box);r2.collapse(false);
+  sel.removeAllRanges();sel.addRange(r2);
+  const sec=sections.find(s=>s.id===curId);if(sec){sec.content=el.innerHTML;saveSectionToFirebase(sec.id);}
 }
 function insertSep(t){
   if(mode==='reader'){ showToast('🔒 Lecture seule'); return; }
