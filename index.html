@@ -2745,6 +2745,8 @@ function applyAnn(){
 const TBL_COLORS = { cyan:'var(--c)', blue:'var(--c-dd)', grey:'#475569', green:'#16a34a' };
 
 function openTableModal(){
+  // CRITIQUE : sauvegarder la position du curseur AVANT d'ouvrir la modale
+  saveSel();
   updateColInputs();
   updateRowInputs();
   updateTablePreview();
@@ -2839,24 +2841,28 @@ function confirmInsertTable(){
 
   const el = getActiveContent();
   if(!el){ closeOverlay('table-modal'); return; }
-  el.focus();
 
   // Paragraphes vides avant et après le tableau
   const pBefore = document.createElement('p'); pBefore.innerHTML='<br>';
   const pAfter  = document.createElement('p'); pAfter.innerHTML='<br>';
 
-  const sel = window.getSelection();
-  if(sel?.rangeCount){
-    const r = sel.getRangeAt(0);
-    r.collapse(false);
-    // Insérer dans cet ordre : pBefore, wrap, pAfter
-    r.insertNode(pAfter);
-    r.insertNode(wrap);
-    r.insertNode(pBefore);
+  // Restaurer la position du curseur sauvegardée AVANT l'ouverture de la modale
+  if(savedRange){
+    el.focus();
+    restoreSel();
+    const sel = window.getSelection();
+    if(sel?.rangeCount){
+      const r = sel.getRangeAt(0);
+      r.collapse(false);
+      r.insertNode(pAfter);
+      r.insertNode(wrap);
+      r.insertNode(pBefore);
+    } else {
+      el.appendChild(pBefore); el.appendChild(wrap); el.appendChild(pAfter);
+    }
   } else {
-    el.appendChild(pBefore);
-    el.appendChild(wrap);
-    el.appendChild(pAfter);
+    el.focus();
+    el.appendChild(pBefore); el.appendChild(wrap); el.appendChild(pAfter);
   }
 
   // Placer le curseur dans pAfter
@@ -2878,13 +2884,29 @@ function buildTableEl(cols, rows, style, hasColHeader=true, hasRowHeader=false, 
   wrap.className = `doc-table-wrap style-${style}`;
   wrap.contentEditable = 'false';
 
-  // Barre d'actions
+  // Barre d'outils complète (toujours visible sous le tableau)
   const bar = document.createElement('div');
   bar.className = 'tbl-actions';
   bar.innerHTML = `
-    <button class="tbl-act-btn" onclick="addTableRow(this)" title="Ajouter une ligne">+ Ligne</button>
-    <button class="tbl-act-btn" onclick="addTableCol(this)" title="Ajouter une colonne">+ Colonne</button>
-    <button class="tbl-act-btn red" onclick="delTable(this)" title="Supprimer le tableau">✕ Tableau</button>`;
+    <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Lignes :</span>
+    <button class="tbl-act-btn" onclick="addTableRow(this,false)" title="Ajouter une ligne à la fin">+ Fin</button>
+    <button class="tbl-act-btn" onclick="addTableRow(this,true)" title="Ajouter une ligne au début">+ Début</button>
+    <button class="tbl-act-btn red" onclick="delTableRow(this)" title="Supprimer la dernière ligne">- Ligne</button>
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
+    <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Colonnes :</span>
+    <button class="tbl-act-btn" onclick="addTableCol(this)" title="Ajouter une colonne à droite">+ Col.</button>
+    <button class="tbl-act-btn red" onclick="delTableCol(this)" title="Supprimer la dernière colonne">- Col.</button>
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
+    <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-right:4px">Taille :</span>
+    <button class="tbl-act-btn" onclick="tblWidth(this,'100%')" title="Pleine largeur">⟷ 100%</button>
+    <button class="tbl-act-btn" onclick="tblWidth(this,'70%')" title="70%">70%</button>
+    <button class="tbl-act-btn" onclick="tblWidth(this,'50%')" title="50%">50%</button>
+    <button class="tbl-act-btn" onclick="tblWidth(this,'auto')" title="Auto">Auto</button>
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
+    <button class="tbl-act-btn" onclick="moveTbl(this,-1)" title="Déplacer vers le haut">↑ Déplacer</button>
+    <button class="tbl-act-btn" onclick="moveTbl(this,1)" title="Déplacer vers le bas">↓ Déplacer</button>
+    <span style="width:1px;height:18px;background:var(--border);margin:0 4px;flex-shrink:0"></span>
+    <button class="tbl-act-btn red" onclick="delTable(this)" title="Supprimer le tableau">🗑 Supprimer</button>`;
   wrap.appendChild(bar);
 
   const tbl = document.createElement('table');
@@ -2940,19 +2962,80 @@ function saveTableContent(){
   if(sec){ sec.content=getActiveContent()?.innerHTML||''; saveSectionToFirebase(sec.id); }
 }
 
-function addTableRow(btn){
+function addTableRow(btn, atStart=false){
   const wrap = btn.closest('.doc-table-wrap');
   const tbl = wrap.querySelector('table');
-  const cols = tbl.querySelectorAll('thead th').length;
+  const tbody = tbl.querySelector('tbody');
+  // Compter les colonnes (thead ou première tr de tbody)
+  const firstRow = tbl.querySelector('tr');
+  const colCount = firstRow ? firstRow.querySelectorAll('th,td').length : 1;
+  // Vérifier si il y a des en-têtes de ligne (tbody th)
+  const hasRowHeader = tbody?.querySelector('tr th') !== null;
+
   const tr = document.createElement('tr');
-  for(let i=0;i<cols;i++){
+  if(hasRowHeader){
+    const th = document.createElement('th');
+    th.contentEditable='true'; th.innerHTML='<br>';
+    th.addEventListener('input', saveTableContent);
+    tr.appendChild(th);
+  }
+  const dataCols = colCount - (hasRowHeader ? 1 : 0);
+  for(let i=0;i<dataCols;i++){
     const td = document.createElement('td');
     td.contentEditable='true'; td.innerHTML='<br>';
     td.addEventListener('input', saveTableContent);
     tr.appendChild(td);
   }
-  tbl.querySelector('tbody').appendChild(tr);
+  if(atStart && tbody.firstChild) tbody.insertBefore(tr, tbody.firstChild);
+  else tbody.appendChild(tr);
   saveTableContent();
+  showToast('+ Ligne ajoutée');
+}
+
+function delTableRow(btn){
+  const wrap = btn.closest('.doc-table-wrap');
+  const tbl = wrap.querySelector('table');
+  const rows = tbl.querySelectorAll('tbody tr');
+  if(rows.length <= 1){ showToast('⚠️ Minimum 1 ligne'); return; }
+  rows[rows.length-1].remove();
+  saveTableContent();
+  showToast('- Ligne supprimée');
+}
+
+function delTableCol(btn){
+  const wrap = btn.closest('.doc-table-wrap');
+  const tbl = wrap.querySelector('table');
+  // Compter les colonnes de données
+  const headCols = tbl.querySelectorAll('thead tr th');
+  if(headCols.length <= 1){ showToast('⚠️ Minimum 1 colonne'); return; }
+  // Supprimer la dernière colonne dans chaque ligne
+  tbl.querySelectorAll('tr').forEach(tr=>{
+    const cells = tr.querySelectorAll('th,td');
+    if(cells.length > 1) cells[cells.length-1].remove();
+  });
+  saveTableContent();
+  showToast('- Colonne supprimée');
+}
+
+function tblWidth(btn, w){
+  const wrap = btn.closest('.doc-table-wrap');
+  wrap.style.width = w;
+  wrap.querySelector('table').style.width = w==='auto' ? 'auto' : '100%';
+  saveTableContent();
+}
+
+function moveTbl(btn, dir){
+  const wrap = btn.closest('.doc-table-wrap');
+  const el = getActiveContent();
+  if(!el) return;
+  // Trouver l'élément frère dans la direction
+  const sibling = dir < 0 ? wrap.previousElementSibling : wrap.nextElementSibling;
+  if(!sibling){ showToast('Impossible de déplacer'); return; }
+  if(dir < 0) el.insertBefore(wrap, sibling);
+  else sibling.after(wrap);
+  saveTableContent();
+  // Scroll pour voir le tableau
+  wrap.scrollIntoView({behavior:'smooth', block:'nearest'});
 }
 
 function addTableCol(btn){
