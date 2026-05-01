@@ -620,6 +620,10 @@ figure.img-wrap:hover .img-bar,figure.img-wrap.sel .img-bar{display:flex}
   font-size:12px; border-bottom:2px solid rgba(255,255,255,.3);
   white-space:nowrap;
 }
+.doc-table-wrap tbody th{
+  border-bottom:1px solid var(--border);
+  border-right:2px solid rgba(255,255,255,.3);
+}
 .doc-table-wrap td{
   padding:8px 12px; border-bottom:1px solid var(--border);
   vertical-align:top; outline:none;
@@ -1216,18 +1220,18 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
 
 <!-- Table Modal -->
 <div class="overlay" id="table-modal">
-  <div class="modal" style="width:520px">
+  <div class="modal" style="width:540px">
     <h3>⊞ Créer un tableau</h3>
-    <div style="display:flex;gap:12px;margin-bottom:14px;align-items:center">
+    <div style="display:flex;gap:10px;margin-bottom:12px;align-items:flex-end;flex-wrap:wrap">
       <div>
         <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Colonnes</label>
-        <input type="number" id="tbl-cols" value="3" min="1" max="8" style="width:70px;padding:7px 10px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:14px;outline:none">
+        <input type="number" id="tbl-cols" value="3" min="1" max="8" style="width:65px;padding:7px 10px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:14px;outline:none">
       </div>
       <div>
-        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Lignes (sans en-tête)</label>
-        <input type="number" id="tbl-rows" value="3" min="1" max="20" style="width:70px;padding:7px 10px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:14px;outline:none">
+        <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Lignes de données</label>
+        <input type="number" id="tbl-rows" value="3" min="1" max="20" style="width:65px;padding:7px 10px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:14px;outline:none">
       </div>
-      <div style="flex:1">
+      <div style="flex:1;min-width:120px">
         <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Style</label>
         <select id="tbl-style" style="width:100%;padding:7px 10px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px">
           <option value="cyan">Cyan (défaut)</option>
@@ -1237,9 +1241,22 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
         </select>
       </div>
     </div>
+    <!-- Options en-têtes -->
+    <div style="display:flex;gap:16px;margin-bottom:14px;padding:10px 12px;background:var(--c-bg);border-radius:8px;border:1.5px solid var(--border)">
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="tbl-header-col" checked style="width:15px;height:15px"> En-tête de colonnes (ligne du haut)
+      </label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer">
+        <input type="checkbox" id="tbl-header-row" style="width:15px;height:15px"> En-tête de lignes (1ère colonne)
+      </label>
+    </div>
     <div id="tbl-header-inputs" style="margin-bottom:12px">
-      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Noms des colonnes (en-tête)</label>
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Noms des colonnes</label>
       <div id="tbl-col-names" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    </div>
+    <div id="tbl-row-header-inputs" style="margin-bottom:12px;display:none">
+      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Noms des lignes</label>
+      <div id="tbl-row-names" style="display:flex;flex-direction:column;gap:6px"></div>
     </div>
     <!-- Aperçu -->
     <div style="margin-bottom:14px">
@@ -2729,11 +2746,33 @@ const TBL_COLORS = { cyan:'var(--c)', blue:'var(--c-dd)', grey:'#475569', green:
 
 function openTableModal(){
   updateColInputs();
+  updateRowInputs();
   updateTablePreview();
   document.getElementById('tbl-cols').oninput = ()=>{ updateColInputs(); updateTablePreview(); };
-  document.getElementById('tbl-rows').oninput = updateTablePreview;
+  document.getElementById('tbl-rows').oninput = ()=>{ updateRowInputs(); updateTablePreview(); };
   document.getElementById('tbl-style').onchange = updateTablePreview;
+  document.getElementById('tbl-header-col').onchange = ()=>{ updateColInputs(); updateTablePreview(); };
+  document.getElementById('tbl-header-row').onchange = ()=>{
+    const show=document.getElementById('tbl-header-row').checked;
+    document.getElementById('tbl-row-header-inputs').style.display=show?'block':'none';
+    updateRowInputs(); updateTablePreview();
+  };
   document.getElementById('table-modal').classList.add('open');
+}
+
+function updateRowInputs(){
+  const n = Math.min(20, Math.max(1, +document.getElementById('tbl-rows').value || 3));
+  const wrap = document.getElementById('tbl-row-names');
+  const existing = [...wrap.querySelectorAll('input')].map(i=>i.value);
+  wrap.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const inp = document.createElement('input');
+    inp.type='text'; inp.placeholder=`Ligne ${i+1}`;
+    inp.value = existing[i] || '';
+    inp.style.cssText='padding:5px 10px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:12px;outline:none;width:100%';
+    inp.oninput = updateTablePreview;
+    wrap.appendChild(inp);
+  }
 }
 
 function updateColInputs(){
@@ -2756,21 +2795,36 @@ function getColNames(){
   return [...document.getElementById('tbl-col-names').querySelectorAll('input')].map(i=>i.value||i.placeholder);
 }
 
+function getRowNames(){
+  return [...document.getElementById('tbl-row-names').querySelectorAll('input')].map(i=>i.value||i.placeholder);
+}
+
 function updateTablePreview(){
   const cols = getColNames();
   const rows = Math.min(20, Math.max(1, +document.getElementById('tbl-rows').value || 3));
   const style = document.getElementById('tbl-style').value;
+  const hasRowHeader = document.getElementById('tbl-header-row').checked;
+  const hasColHeader = document.getElementById('tbl-header-col').checked;
+  const rowNames = hasRowHeader ? getRowNames() : [];
   const color = TBL_COLORS[style]||TBL_COLORS.cyan;
-  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>`;
-  cols.forEach(c=>{ html+=`<th style="padding:7px 10px;background:${color};color:white;font-weight:700;text-align:left;font-size:11px">${c}</th>`; });
-  html+='</tr></thead><tbody>';
+  let html = `<table style="width:100%;border-collapse:collapse;font-size:12px">`;
+  if(hasColHeader){
+    html+=`<thead><tr>`;
+    if(hasRowHeader) html+=`<th style="padding:7px 10px;background:${color};color:white;font-weight:700;font-size:11px"></th>`;
+    cols.forEach(c=>{ html+=`<th style="padding:7px 10px;background:${color};color:white;font-weight:700;text-align:left;font-size:11px">${c}</th>`; });
+    html+=`</tr></thead>`;
+  }
+  html+=`<tbody>`;
   for(let r=0;r<rows;r++){
     const bg=r%2===0?'rgba(255,255,255,.5)':'';
     html+=`<tr>`;
+    if(hasRowHeader){
+      html+=`<th style="padding:7px 10px;background:${color};color:white;font-weight:700;text-align:left;font-size:11px;white-space:nowrap">${rowNames[r]||('Ligne '+(r+1))}</th>`;
+    }
     cols.forEach(()=>{ html+=`<td style="padding:6px 10px;border-bottom:1px solid #e2e8f0;background:${bg}">…</td>`; });
-    html+='</tr>';
+    html+=`</tr>`;
   }
-  html+='</tbody></table>';
+  html+=`</tbody></table>`;
   document.getElementById('tbl-preview').innerHTML = html;
 }
 
@@ -2778,30 +2832,48 @@ function confirmInsertTable(){
   const cols = getColNames();
   const rows = Math.min(20, Math.max(1, +document.getElementById('tbl-rows').value || 3));
   const style = document.getElementById('tbl-style').value;
-  const wrap = buildTableEl(cols, rows, style);
+  const hasRowHeader = document.getElementById('tbl-header-row').checked;
+  const hasColHeader = document.getElementById('tbl-header-col').checked;
+  const rowNames = hasRowHeader ? getRowNames() : [];
+  const wrap = buildTableEl(cols, rows, style, hasColHeader, hasRowHeader, rowNames);
 
   const el = getActiveContent();
   if(!el){ closeOverlay('table-modal'); return; }
   el.focus();
+
+  // Paragraphes vides avant et après le tableau
+  const pBefore = document.createElement('p'); pBefore.innerHTML='<br>';
+  const pAfter  = document.createElement('p'); pAfter.innerHTML='<br>';
+
   const sel = window.getSelection();
   if(sel?.rangeCount){
     const r = sel.getRangeAt(0);
     r.collapse(false);
+    // Insérer dans cet ordre : pBefore, wrap, pAfter
+    r.insertNode(pAfter);
     r.insertNode(wrap);
+    r.insertNode(pBefore);
   } else {
+    el.appendChild(pBefore);
     el.appendChild(wrap);
+    el.appendChild(pAfter);
   }
-  // Curseur après le tableau
-  const p = document.createElement('p'); p.innerHTML='<br>';
-  wrap.after(p);
+
+  // Placer le curseur dans pAfter
+  requestAnimationFrame(()=>{
+    const r2 = document.createRange();
+    r2.setStart(pAfter, 0); r2.collapse(true);
+    const s2 = window.getSelection();
+    s2.removeAllRanges(); s2.addRange(r2);
+  });
 
   closeOverlay('table-modal');
   const sec = sections.find(s=>s.id===curId);
-  if(sec){ sec.content=el.innerHTML; saveData(); }
+  if(sec){ sec.content=el.innerHTML; saveSectionToFirebase(sec.id); }
   showToast('⊞ Tableau inséré');
 }
 
-function buildTableEl(cols, rows, style){
+function buildTableEl(cols, rows, style, hasColHeader=true, hasRowHeader=false, rowNames=[]){
   const wrap = document.createElement('div');
   wrap.className = `doc-table-wrap style-${style}`;
   wrap.contentEditable = 'false';
@@ -2815,22 +2887,41 @@ function buildTableEl(cols, rows, style){
     <button class="tbl-act-btn red" onclick="delTable(this)" title="Supprimer le tableau">✕ Tableau</button>`;
   wrap.appendChild(bar);
 
-  // Table
   const tbl = document.createElement('table');
-  const thead = document.createElement('thead');
-  const hrow = document.createElement('tr');
-  cols.forEach(c=>{
-    const th = document.createElement('th');
-    th.contentEditable='true'; th.textContent=c;
-    th.addEventListener('input', saveTableContent);
-    hrow.appendChild(th);
-  });
-  thead.appendChild(hrow);
-  tbl.appendChild(thead);
 
+  // En-tête de colonnes
+  if(hasColHeader){
+    const thead = document.createElement('thead');
+    const hrow = document.createElement('tr');
+    // Cellule vide en haut à gauche si on a aussi des en-têtes de ligne
+    if(hasRowHeader){
+      const corner = document.createElement('th');
+      corner.contentEditable='true'; corner.innerHTML='<br>';
+      corner.addEventListener('input', saveTableContent);
+      hrow.appendChild(corner);
+    }
+    cols.forEach(c=>{
+      const th = document.createElement('th');
+      th.contentEditable='true'; th.textContent=c;
+      th.addEventListener('input', saveTableContent);
+      hrow.appendChild(th);
+    });
+    thead.appendChild(hrow);
+    tbl.appendChild(thead);
+  }
+
+  // Corps du tableau
   const tbody = document.createElement('tbody');
   for(let r=0;r<rows;r++){
     const tr = document.createElement('tr');
+    // En-tête de ligne (première cellule = th)
+    if(hasRowHeader){
+      const th = document.createElement('th');
+      th.contentEditable='true';
+      th.textContent = rowNames[r] || ('Ligne '+(r+1));
+      th.addEventListener('input', saveTableContent);
+      tr.appendChild(th);
+    }
     cols.forEach(()=>{
       const td = document.createElement('td');
       td.contentEditable='true'; td.innerHTML='<br>';
@@ -2885,8 +2976,18 @@ function addTableCol(btn){
 function delTable(btn){
   const wrap = btn.closest('.doc-table-wrap');
   showConfirm('Supprimer ce tableau ?', ()=>{
-    wrap.remove();
+    // Remplacer le tableau par un p vide (ne pas supprimer le texte autour)
+    const p = document.createElement('p'); p.innerHTML='<br>';
+    wrap.replaceWith(p);
+    // Placer le curseur dans ce paragraphe
+    requestAnimationFrame(()=>{
+      const r = document.createRange();
+      r.setStart(p, 0); r.collapse(true);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+    });
     saveTableContent();
+    showToast('🗑 Tableau supprimé');
   });
 }
 
