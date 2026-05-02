@@ -1893,17 +1893,69 @@ function renderTree(q){
     const srow = document.createElement('div');
     srow.className='sector-row'+(isOpen?' open':'');
     srow.innerHTML=`<span class="sector-icon">${sec.icon}</span><span class="sector-label">${sec.label}</span><span class="sector-tog">${isOpen?'▾':'▸'}</span>`;
-    srow.onclick=()=>{
+    srow.onclick=(e)=>{
+      if(e.target.classList.contains('drag-handle')) return;
       const wasOpen=sectorOpen[sec.id];
       Object.keys(sectorOpen).forEach(k=>sectorOpen[k]=false);
       sectorOpen[sec.id]=!wasOpen;
       renderTree();
     };
+
+    // Drag & drop : accepter un chapitre droppé sur le secteur
+    srow.addEventListener('dragover',e=>{
+      if(!dragSrc) return;
+      const srcSec=sections.find(s=>s.id===dragSrc);
+      if(!srcSec||srcSec.parentId) return; // seulement les chapitres racine
+      e.preventDefault();
+      srow.style.outline='2px dashed var(--c)';
+      srow.style.background='var(--c-xl)';
+    });
+    srow.addEventListener('dragleave',()=>{
+      srow.style.outline='';
+      srow.style.background='';
+    });
+    srow.addEventListener('drop',e=>{
+      e.preventDefault();
+      srow.style.outline='';
+      srow.style.background='';
+      if(!dragSrc) return;
+      const srcSec=sections.find(s=>s.id===dragSrc);
+      if(!srcSec||srcSec.parentId) return;
+      // Retirer le chapitre de tous les secteurs
+      SECTORS.forEach(s=>{ s.chapters=(s.chapters||[]).filter(c=>c!==dragSrc); });
+      // L'ajouter à CE secteur
+      if(!Array.isArray(sec.chapters)) sec.chapters=[];
+      if(!sec.chapters.includes(dragSrc)) sec.chapters.push(dragSrc);
+      saveSectors();
+      renderTree();
+      renderFullDoc(dragSrc);
+      showToast('✓ Chapitre déplacé dans '+sec.label);
+      dragSrc=null;
+    });
+
     tree.appendChild(srow);
 
     if(isOpen){
       const schild=document.createElement('div');
       schild.className='sector-children';
+      // Zone de drop pour chapitres
+      schild.addEventListener('dragover',e=>{
+        if(!dragSrc) return;
+        const srcSec=sections.find(s=>s.id===dragSrc);
+        if(!srcSec||srcSec.parentId) e.preventDefault();
+      });
+      schild.addEventListener('drop',e=>{
+        e.preventDefault();
+        if(!dragSrc) return;
+        const srcSec=sections.find(s=>s.id===dragSrc);
+        if(!srcSec||srcSec.parentId) return;
+        SECTORS.forEach(s=>{ s.chapters=(s.chapters||[]).filter(c=>c!==dragSrc); });
+        if(!Array.isArray(sec.chapters)) sec.chapters=[];
+        if(!sec.chapters.includes(dragSrc)) sec.chapters.push(dragSrc);
+        saveSectors(); renderTree(); renderFullDoc(dragSrc);
+        showToast('✓ Chapitre déplacé dans '+sec.label);
+        dragSrc=null;
+      });
       secChapters.forEach((s,i)=>schild.appendChild(buildNode(s,String(i+1))));
       tree.appendChild(schild);
     }
@@ -1970,7 +2022,13 @@ function buildNode(s,num){
 
   row.onclick=e=>{ if(!e.target.classList.contains('tree-del')) selectSection(s.id); };
 
-  row.addEventListener('dragstart',e=>{dragSrc=s.id;row.classList.add('drag-ghost');e.dataTransfer.effectAllowed='move';});
+  row.addEventListener('dragstart',e=>{
+    dragSrc=s.id;
+    row.classList.add('drag-ghost');
+    e.dataTransfer.effectAllowed='move';
+    // Si c'est un chapitre racine, afficher un hint
+    if(!s.parentId) showToast('📁 Glisse vers un secteur pour le déplacer');
+  });
   row.addEventListener('dragend',()=>{row.classList.remove('drag-ghost');document.querySelectorAll('.drag-over').forEach(x=>x.classList.remove('drag-over'));});
   row.addEventListener('dragover',e=>{e.preventDefault();row.classList.add('drag-over');});
   row.addEventListener('dragleave',()=>row.classList.remove('drag-over'));
