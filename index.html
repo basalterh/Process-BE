@@ -1208,50 +1208,34 @@ a.ilink:hover{color:var(--c-d);border-bottom-color:var(--c)}
 
 <!-- PDF Export Modal -->
 <div class="overlay" id="pdf-modal" style="z-index:1050">
-  <div class="modal" style="width:500px;max-height:85vh">
+  <div class="modal" style="width:580px;max-height:88vh;display:flex;flex-direction:column">
     <h3>📄 Exporter en PDF</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:14px">Choisissez ce que vous souhaitez exporter.</p>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Cochez les éléments à inclure dans le PDF. Vous pouvez sélectionner des secteurs entiers, des chapitres isolés, ou des sous-chapitres.</p>
 
-    <!-- Scope -->
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:.12s" onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
-        <input type="radio" name="pdf-scope" value="all" checked style="width:15px;height:15px">
-        <div><div style="font-size:13px;font-weight:700;color:var(--text)">📚 Document complet</div><div style="font-size:11px;color:var(--muted)">Tous les secteurs et chapitres</div></div>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:.12s" onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
-        <input type="radio" name="pdf-scope" value="sector" style="width:15px;height:15px" onchange="document.getElementById('pdf-sector-pick').style.display='block';document.getElementById('pdf-chapter-pick').style.display='none'">
-        <div><div style="font-size:13px;font-weight:700;color:var(--text)">🗂 Un secteur</div><div style="font-size:11px;color:var(--muted)">Tous les chapitres d'un secteur</div></div>
-      </label>
-      <label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:8px;border:1.5px solid var(--border);cursor:pointer;transition:.12s" onmouseover="this.style.borderColor='var(--c)'" onmouseout="this.style.borderColor='var(--border)'">
-        <input type="radio" name="pdf-scope" value="chapter" style="width:15px;height:15px" onchange="document.getElementById('pdf-chapter-pick').style.display='block';document.getElementById('pdf-sector-pick').style.display='none'">
-        <div><div style="font-size:13px;font-weight:700;color:var(--text)">📁 Un chapitre</div><div style="font-size:11px;color:var(--muted)">Un chapitre et ses sous-sections</div></div>
-      </label>
+    <!-- Tout sélectionner -->
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button onclick="pdfSelAll(true)" style="padding:5px 12px;border-radius:6px;border:1.5px solid var(--border);background:var(--c-bg);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2)">☑ Tout sélectionner</button>
+      <button onclick="pdfSelAll(false)" style="padding:5px 12px;border-radius:6px;border:1.5px solid var(--border);background:var(--c-bg);font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;color:var(--text2)">☐ Tout désélectionner</button>
+      <span id="pdf-count" style="margin-left:auto;font-size:12px;font-weight:600;color:var(--c);align-self:center"></span>
     </div>
 
-    <!-- Sélection secteur -->
-    <div id="pdf-sector-pick" style="display:none;margin-bottom:12px">
-      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Secteur :</label>
-      <select id="pdf-sector-sel" style="width:100%;padding:8px 12px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;outline:none"></select>
-    </div>
-
-    <!-- Sélection chapitre -->
-    <div id="pdf-chapter-pick" style="display:none;margin-bottom:12px">
-      <label style="font-size:12px;font-weight:600;color:var(--text2);display:block;margin-bottom:6px">Chapitre :</label>
-      <select id="pdf-chapter-sel" style="width:100%;padding:8px 12px;border-radius:7px;border:1.5px solid var(--border);font-family:inherit;font-size:13px;outline:none"></select>
-    </div>
+    <!-- Arbre de sélection -->
+    <div id="pdf-tree" style="flex:1;overflow-y:auto;border:1.5px solid var(--border);border-radius:8px;background:var(--c-bg);padding:8px;min-height:200px;max-height:380px"></div>
 
     <!-- Options -->
-    <div style="padding:10px 12px;background:var(--c-bg);border-radius:8px;border:1.5px solid var(--border);margin-bottom:14px">
-      <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Options</div>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer;margin-bottom:6px">
-        <input type="checkbox" id="pdf-header" checked style="width:14px;height:14px"> Afficher le titre du document en en-tête
+    <div style="padding:10px 12px;background:var(--c-bg);border-radius:8px;border:1.5px solid var(--border);margin-top:12px;display:flex;gap:20px;flex-wrap:wrap">
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);cursor:pointer;font-weight:600">
+        <input type="checkbox" id="pdf-header" checked style="width:14px;height:14px"> En-tête avec titre
       </label>
-      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);cursor:pointer">
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);cursor:pointer;font-weight:600">
         <input type="checkbox" id="pdf-pagenum" checked style="width:14px;height:14px"> Numéros de page
+      </label>
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);cursor:pointer;font-weight:600">
+        <input type="checkbox" id="pdf-toc" style="width:14px;height:14px"> Table des matières
       </label>
     </div>
 
-    <div class="modal-acts">
+    <div class="modal-acts" style="margin-top:12px">
       <button class="btn-cancel" onclick="closeOverlay('pdf-modal')">Annuler</button>
       <button class="btn-ok" onclick="doPdfExport()">📄 Générer le PDF</button>
     </div>
@@ -3746,78 +3730,146 @@ function exportHTML(){
   a.download='process-be.html';a.click();
   showToast('⬇ Export HTML');
 }
+// ─── PDF EXPORT ──────────────────────────
+let _pdfSelected = new Set(); // IDs des sections sélectionnées
+
 function exportPDF(){
   saveAllBlocks();
-  // Remplir les sélecteurs
-  const secSel=document.getElementById('pdf-sector-sel');
-  const chSel=document.getElementById('pdf-chapter-sel');
-  secSel.innerHTML='';
-  chSel.innerHTML='';
-  // Secteurs
-  (SECTORS||[]).filter(Boolean).forEach(sec=>{
-    const o=document.createElement('option');
-    o.value=sec.id; o.textContent=(sec.icon||'')+' '+sec.label;
-    secSel.appendChild(o);
-  });
-  // Chapitres
-  sections.filter(s=>!s.parentId||s.parentId===null||s.parentId==='null').forEach(ch=>{
-    const o=document.createElement('option');
-    o.value=ch.id; o.textContent=ch.title;
-    chSel.appendChild(o);
-  });
-  // Reset radio
-  document.querySelector('input[name="pdf-scope"][value="all"]').checked=true;
-  document.getElementById('pdf-sector-pick').style.display='none';
-  document.getElementById('pdf-chapter-pick').style.display='none';
+  _pdfSelected = new Set();
+  renderPdfTree();
   document.getElementById('pdf-modal').classList.add('open');
 }
 
-function doPdfExport(){
-  closeOverlay('pdf-modal');
-  const scope=document.querySelector('input[name="pdf-scope"]:checked').value;
-  const showHeader=document.getElementById('pdf-header').checked;
-  const showPageNum=document.getElementById('pdf-pagenum').checked;
+function renderPdfTree(){
+  const tree = document.getElementById('pdf-tree');
+  tree.innerHTML = '';
+  const ordered = buildOrderedBlocks();
 
-  // Construire les blocs à imprimer
-  let blocks=[];
-  let title='Process BE';
+  let curSector = null;
+  let sectorDiv = null;
 
-  if(scope==='all'){
-    blocks=buildOrderedBlocks().filter(b=>!b._sector);
-  } else if(scope==='sector'){
-    const secId=document.getElementById('pdf-sector-sel').value;
-    const sec=SECTORS.find(s=>s.id===secId);
-    if(sec){
-      title=sec.label;
-      (sec.chapters||[]).forEach(id=>{
-        const root=sections.find(s=>s.id===id);
-        if(!root) return;
-        blocks.push(root);
-        descendantsOrdered(root.id).forEach(s=>blocks.push(s));
-      });
+  ordered.forEach(item=>{
+    if(item._sector){
+      // En-tête de secteur avec case à cocher
+      curSector = item;
+      sectorDiv = document.createElement('div');
+      sectorDiv.style.cssText='margin-bottom:6px';
+
+      const sRow = document.createElement('div');
+      sRow.style.cssText='display:flex;align-items:center;gap:8px;padding:7px 8px;background:var(--c-dd);border-radius:7px;color:white;cursor:pointer';
+
+      const sCb = document.createElement('input');
+      sCb.type='checkbox'; sCb.style.cssText='width:15px;height:15px;cursor:pointer';
+      sCb.dataset.sectorId = item.id;
+      sCb.onchange=()=>pdfToggleSector(item, sCb.checked);
+
+      const sLabel = document.createElement('span');
+      sLabel.style.cssText='font-size:13px;font-weight:700;letter-spacing:.3px;flex:1';
+      sLabel.textContent = (item.icon||'') + ' ' + item.label;
+
+      const sTog = document.createElement('span');
+      sTog.textContent='▾'; sTog.style.cssText='font-size:12px;opacity:.7';
+
+      sRow.appendChild(sCb);
+      sRow.appendChild(sLabel);
+      sRow.appendChild(sTog);
+      sRow.onclick=(e)=>{ if(e.target===sCb) return; const ch=sectorDiv.querySelector('.pdf-sec-children'); if(ch) ch.style.display=ch.style.display==='none'?'block':'none'; sTog.textContent=sTog.textContent==='▾'?'▸':'▾'; };
+
+      const children = document.createElement('div');
+      children.className='pdf-sec-children';
+      children.style.cssText='padding-left:12px;margin-top:4px';
+
+      sectorDiv.appendChild(sRow);
+      sectorDiv.appendChild(children);
+      tree.appendChild(sectorDiv);
+      return;
     }
-  } else {
-    const chId=document.getElementById('pdf-chapter-sel').value;
-    const root=sections.find(s=>s.id===chId);
-    if(root){
-      title=root.title;
-      blocks=[root,...descendantsOrdered(root.id)];
-    }
-  }
 
-  if(!blocks.length){ showToast('Aucun contenu à exporter'); return; }
+    // Nœud section
+    const d = depth(item);
+    const n = secNum(item);
+    const icons={chapter:'📁',subchapter:'📖',section:'📄',paragraph:'◆'};
+    const colors={chapter:'var(--c-dd)',subchapter:'var(--c-d)',section:'var(--c)',paragraph:'var(--muted)'};
 
-  // Générer le HTML d'impression
-  const printHtml=generatePrintHtml(blocks, title, showHeader, showPageNum);
+    const row = document.createElement('label');
+    row.style.cssText=`display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;cursor:pointer;padding-left:${8+(d*12)}px;transition:background .1s`;
+    row.onmouseover=()=>row.style.background='var(--c-xl)';
+    row.onmouseout=()=>row.style.background='';
 
-  // Ouvrir dans une fenêtre et imprimer
-  const win=window.open('','_blank','width=900,height=700');
-  win.document.write(printHtml);
-  win.document.close();
-  win.onload=()=>{ setTimeout(()=>{ win.print(); }, 500); };
+    const cb = document.createElement('input');
+    cb.type='checkbox'; cb.value=item.id;
+    cb.style.cssText='width:13px;height:13px;cursor:pointer;flex-shrink:0';
+    cb.onchange=()=>{ if(cb.checked) _pdfSelected.add(item.id); else _pdfSelected.delete(item.id); updatePdfCount(); };
+
+    const ico = document.createElement('span');
+    ico.textContent=icons[item.type]||'📄';
+    ico.style.cssText='font-size:12px;flex-shrink:0';
+
+    const lbl = document.createElement('span');
+    lbl.style.cssText=`font-size:12px;font-weight:${d===0?'700':d===1?'600':'500'};color:${colors[item.type]||'var(--text)'};overflow:hidden;text-overflow:ellipsis;white-space:nowrap`;
+    lbl.textContent=(n?n+' – ':'')+item.title;
+
+    row.appendChild(cb);
+    row.appendChild(ico);
+    row.appendChild(lbl);
+
+    // Ajouter au bon parent
+    const target = sectorDiv ? sectorDiv.querySelector('.pdf-sec-children') : tree;
+    target.appendChild(row);
+  });
+
+  updatePdfCount();
 }
 
-function generatePrintHtml(blocks, title, showHeader, showPageNum){
+function pdfToggleSector(sectorItem, checked){
+  // Cocher/décocher tous les chapitres du secteur
+  const secObj = SECTORS.find(s=>s.id===sectorItem.id.replace('sector_',''));
+  if(!secObj) return;
+  const allIds = [];
+  (secObj.chapters||[]).forEach(id=>{
+    const root=sections.find(s=>s.id===id);
+    if(!root) return;
+    allIds.push(root.id);
+    descendantsOrdered(root.id).forEach(s=>allIds.push(s.id));
+  });
+  allIds.forEach(id=>{ if(checked) _pdfSelected.add(id); else _pdfSelected.delete(id); });
+  // Mettre à jour visuellement les cases
+  document.querySelectorAll('#pdf-tree input[type=checkbox][value]').forEach(cb=>{
+    if(allIds.includes(cb.value)) cb.checked=checked;
+  });
+  updatePdfCount();
+}
+
+function pdfSelAll(checked){
+  _pdfSelected = checked ? new Set(sections.map(s=>s.id)) : new Set();
+  document.querySelectorAll('#pdf-tree input[type=checkbox]').forEach(cb=>cb.checked=checked);
+  updatePdfCount();
+}
+
+function updatePdfCount(){
+  document.getElementById('pdf-count').textContent = _pdfSelected.size+' section'+ (_pdfSelected.size>1?'s':'') + ' sélectionnée'+ (_pdfSelected.size>1?'s':'');
+}
+
+function doPdfExport(){
+  if(!_pdfSelected.size){ showToast('⚠️ Sélectionnez au moins une section'); return; }
+  closeOverlay('pdf-modal');
+  const showHeader = document.getElementById('pdf-header').checked;
+  const showPageNum = document.getElementById('pdf-pagenum').checked;
+  const showToc = document.getElementById('pdf-toc').checked;
+
+  // Construire les blocs dans l'ordre du document
+  const ordered = buildOrderedBlocks().filter(b=>!b._sector&&_pdfSelected.has(b.id));
+  if(!ordered.length){ showToast('Aucun contenu à exporter'); return; }
+
+  const printHtml = generatePrintHtml(ordered, 'Process BE', showHeader, showPageNum, showToc);
+  const win = window.open('','_blank','width=900,height=700');
+  if(!win){ showToast('⚠️ Autorisez les popups pour exporter'); return; }
+  win.document.write(printHtml);
+  win.document.close();
+  win.onload = ()=>{ setTimeout(()=>win.print(), 600); };
+}
+
+function generatePrintHtml(blocks, title, showHeader, showPageNum, showToc=false){
   const typeTag={chapter:'h1',subchapter:'h2',section:'h3',paragraph:'h4'};
   const typeClass={chapter:'p-ch',subchapter:'p-sc',section:'p-se',paragraph:'p-pa'};
 
@@ -3866,13 +3918,23 @@ function generatePrintHtml(blocks, title, showHeader, showPageNum){
   tr:nth-child(even) td { background:#f8fafc; }
   /* Séparateurs */
   .doc-sep { border:none; border-top:1.5pt solid #0891b2; margin:12pt 0; }
+  /* Table des matières */
+  .toc { margin-bottom:0; }
+  .toc-item { display:flex; gap:8pt; align-items:baseline; margin-bottom:4pt; }
+  .toc-num { font-family:monospace; font-size:9pt; color:#0891b2; font-weight:700; flex-shrink:0; min-width:30pt; }
+  .toc-title { font-size:10pt; color:#0c4a6e; }
+  .toc-d0 .toc-title { font-weight:700; font-size:11pt; text-transform:uppercase; }
+  .toc-d1 { padding-left:12pt; }
+  .toc-d1 .toc-title { font-weight:600; }
+  .toc-d2 { padding-left:24pt; }
+  .toc-d2 .toc-title { color:#0369a1; }
   /* Bouton suppr masqué */
   .box-del { display:none !important; }
   .tbl-actions { display:none !important; }
   img { max-width:100%; border-radius:4pt; }
   @media print { .p-ch { page-break-before:always; } .p-ch:first-child { page-break-before:avoid; } }
 </style>
-</head><body>${body}</body></html>`;
+</head><body>${tocHtml}${body}</body></html>`;
 }
 
 // ─── SIDEBAR TOGGLE ──────────────────────
